@@ -2,6 +2,8 @@
 name = "NOS-GNS3-benchmark"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+license-file = "LICENSE"
 
 [dependencies]
 tokio = { version = "1.50.0",features = ["rt", "rt-multi-thread", "macros", "time"]}
