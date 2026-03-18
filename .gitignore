@@ -9,3 +9,5 @@
 /.vs_code
 
 /experimentation/experiments/*
+/experimentation/results/*
+/experimentation/shared_with_vm/*
