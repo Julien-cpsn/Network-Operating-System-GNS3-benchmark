@@ -1,0 +1,28 @@
+["Linux network stack"]
+start = [
+    "sudo -i",
+    "echo 1 > /proc/sys/net/ipv4/ip_forward"
+]
+add_ip_address = [
+    "ip link set dev {INTERFACE_PREFIX}{INTERFACE} up",
+    "ip address add {IP_ADDRESS} dev {INTERFACE_PREFIX}{INTERFACE}"
+]
+add_static_route =[
+    "ip route add {DISTANT_NETWORK} via {GATEWAY}"
+]
+stop = [
+    "exit"
+]
+
+["MikroTik network stack"]
+# MikroTik CLI lines end with \r\n
+start = [
+    "\r\n"
+]
+add_ip_address = [
+    "ip address add address={IP_ADDRESS} interface={INTERFACE_PREFIX}{INTERFACE}\r\n"
+]
+add_static_route =[
+    "ip route add dst-address={DISTANT_NETWORK} gateway={INTERFACE_PREFIX}{INTERFACE}\r\n"
+]
+stop = []

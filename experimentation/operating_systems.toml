@@ -1,0 +1,21 @@
+[Debian]
+input_ready = ":~"
+#trigger_sequence = null
+login = "root"
+password = "debian"
+network_stack = "Linux network stack"
+#routing_stack = null
+interface_prefix = "ens"
+interfaces_start_at = 3
+image_path = "/home/julien/Programmation/vm/Debian/tmp/debian-bookworm.qcow2"
+
+[MikroTik]
+input_ready = "[admin@MikroTik] >"
+#trigger_sequence = null
+login = "admin"
+password = "test"
+network_stack = "MikroTik network stack"
+routing_stack = "MikroTik routing stack"
+interface_prefix = "ether"
+interfaces_start_at =  1
+image_path = "/home/julien/Programmation/vm/MikroTik/chr-6.49.18.img"
