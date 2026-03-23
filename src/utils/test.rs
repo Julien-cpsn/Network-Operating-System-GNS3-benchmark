@@ -18,7 +18,7 @@ pub async fn test_task(experiment_name: String, test: Test, from_node_name: Stri
 
     info!(target: TARGET, "Running test: {} (duration: {})", &test.name, &test.duration);
 
-    let mut test_commands = guest_test_commands(&test, to_node_ip);
+    let mut test_commands = guest_test_commands(&experiment_name, &test, to_node_ip);
     test_commands.push(OsCommand::new(GUEST_INPUT_READY, ""));
 
     execute_commands(&from_node_name, &console_host, console, test_commands)?;
@@ -42,7 +42,7 @@ pub async fn test_task(experiment_name: String, test: Test, from_node_name: Stri
             let output_path = result_path.join(file.file_name());
 
             info!(target: TARGET, "Retrieved experiment result file: {}", file.file_name().display());
-            info!(target: TARGET, "Moved to : {}", output_path.display());
+            info!(target: TARGET, "Moved to: {}", output_path.display());
 
             fs::rename(file.path(), output_path)?;
         }

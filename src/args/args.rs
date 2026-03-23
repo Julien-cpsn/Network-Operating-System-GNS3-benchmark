@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
 use strum::Display;
+use crate::args::generate::GenerateCommand;
+use crate::args::plot::PlotCommand;
+use crate::args::run::RunCommand;
 use crate::models::hardware_resources::HardwareResources;
 use crate::models::nic::NicType;
 use crate::models::protocol::RoutingProtocol;
@@ -16,17 +19,11 @@ pub enum Command {
     /// Generate experiment files
     Generate(GenerateCommand),
     /// Run experiment files
-    Run(RunCommand)
+    Run(RunCommand),
+    /// Plot experiment results
+    Plot(PlotCommand)
 }
 
-#[derive(Debug, Clone, clap::Args)]
-pub struct GenerateCommand {
-    #[clap(flatten)]
-    pub experiment_selection: ExperimentSelectionArgs,
-
-    #[clap(subcommand)]
-    pub command: GenerateSubcommand
-}
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct ExperimentSelectionArgs {
@@ -53,36 +50,4 @@ pub struct ExperimentSelectionArgs {
     /// Routing protocol to use. All if absent
     #[arg(short, long)]
     pub protocol: Option<RoutingProtocol>,
-}
-
-#[derive(Debug, Clone, Subcommand, Display)]
-pub enum GenerateSubcommand {
-    /// Run the following generated experiment files
-    Run(RunCommandArgs),
-    /// Generate experiment files
-    Files {
-        /// Override existing experiment files
-        #[arg(long, name = "override", default_value_t = true)]
-        override_: bool,
-    }
-}
-
-#[derive(Debug, Clone, clap::Args)]
-pub struct RunCommand {
-    #[clap(flatten)]
-    pub experiment_selection: ExperimentSelectionArgs,
-
-    #[clap(flatten)]
-    pub run_command: RunCommandArgs,
-}
-
-#[derive(Debug, Clone, clap::Args)]
-pub struct RunCommandArgs {
-    /// Only run the first experiment
-    #[arg(long)]
-    pub first_only: bool,
-
-    /// Do not stop GNS3 nodes after the end of the experiment
-    #[arg(long)]
-    pub no_stop: bool,
 }

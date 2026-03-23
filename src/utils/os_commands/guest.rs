@@ -21,11 +21,11 @@ pub fn guest_add_route_commands(distant_network: &DistantNetwork) -> Vec<OsComma
     ]
 }
 
-pub fn guest_test_commands(test: &Test, server_ip: Ipv4Addr) -> Vec<OsCommand> {
+pub fn guest_test_commands(experiment_name: &str, test: &Test, server_ip: Ipv4Addr) -> Vec<OsCommand> {
     vec![
         OsCommand::new(":~", "mkdir /mnt/shared"),
         OsCommand::new(":~", "mount -t 9p -o trans=virtio,version=9p2000.L shared_folder /mnt/shared"),
-        OsCommand::new(":~", format!("flent {} -t {} -l {} -H {}", test.test, test.name, test.duration, server_ip)),
+        OsCommand::new(":~", format!("flent {} -t \"{}\" -l {} -H {}", test.test, experiment_name, test.duration, server_ip)),
         OsCommand::new(":~", "cp *.flent.gz /mnt/shared"),
         OsCommand::new(":~", ""),
     ]

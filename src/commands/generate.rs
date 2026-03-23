@@ -4,7 +4,7 @@ use std::process::exit;
 use indexmap::IndexMap;
 use log::{debug, error, info, warn};
 use strum::VariantArray;
-use crate::args::{GenerateCommand, GenerateSubcommand};
+use crate::args::generate::{GenerateCommand, GenerateSubcommand};
 use crate::models::experiment::Experiment;
 use crate::models::hardware_resources::HardwareResources;
 use crate::models::network::Network;
@@ -156,8 +156,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                             }
 
                             let experiment = Experiment {
-                                experiment_name: format!("{topology_name} router topology {os_name} {test_batch_name} {resources} {nic} {routing_protocol}"),
-                                plot_legend_when_merged: format!("{topology_name} {os_name} {test_batch_name} {resources} {nic} {routing_protocol}"),
+                                experiment_name: format!("{topology_name},{os_name},{test_batch_name},{resources},{nic},{routing_protocol}"),
                                 network: Network {
                                     nodes,
                                     physical_links: topology.network.physical_links.clone()

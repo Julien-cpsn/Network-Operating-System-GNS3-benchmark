@@ -7,3 +7,4 @@ pub mod experiments;
 pub mod shared_dir;
 pub mod results_dir;
 pub mod routing_stacks;
+pub mod plot_dir;

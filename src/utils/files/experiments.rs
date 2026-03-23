@@ -5,7 +5,7 @@ use std::process::exit;
 use log::{error, info};
 use once_cell::sync::Lazy;
 use walkdir::WalkDir;
-use crate::args::ExperimentSelectionArgs;
+use crate::args::args::ExperimentSelectionArgs;
 use crate::models::experiment::Experiment;
 
 const TARGET: &str = "files";

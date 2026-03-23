@@ -3,14 +3,17 @@ mod utils;
 mod args;
 mod commands;
 
-use crate::args::{Args, Command, GenerateSubcommand, RunCommand};
 use crate::commands::generate::generate;
 use crate::commands::run::run;
-use clap::Parser;
 use log::{info, LevelFilter};
 use once_cell::sync::{Lazy, OnceCell};
 use std::path::PathBuf;
+use clap::Parser;
 use futures::{FutureExt};
+use crate::args::args::{Args, Command};
+use crate::args::generate::GenerateSubcommand;
+use crate::args::run::RunCommand;
+use crate::commands::plot::plot;
 
 pub static ARGS: Lazy<Args> = Lazy::new(|| Args::parse());
 
@@ -49,6 +52,7 @@ async fn handle_command(command: &Command) -> anyhow::Result<()> {
             }
         },
         Command::Run(run_command) => run(run_command.clone()).await?,
+        Command::Plot(plot_command) => plot(plot_command.clone())?,
     }
 
     Ok(())

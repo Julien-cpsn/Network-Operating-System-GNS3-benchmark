@@ -5,12 +5,15 @@ use strum::{Display, VariantArray};
 pub enum HardwareResources {
     /// Low resources (1 vCPU, 1024 MB RAM)
     #[clap(name = "lr")]
+    #[strum(to_string = "Low Resources")]
     LowResources,
     /// Medium resources (2 vCPU, 2048 MB RAM)
     #[clap(name = "mr")]
+    #[strum(to_string = "Medium Resources")]
     MediumResources,
     /// High resources (4 vCPU, 8096 MB RAM)
     #[clap(name = "hr")]
+    #[strum(to_string = "High Resources")]
     HighResources,
 }
 
