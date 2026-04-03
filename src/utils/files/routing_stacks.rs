@@ -2,7 +2,7 @@ use std::{env, fs};
 use std::path::{PathBuf};
 use std::process::exit;
 use indexmap::IndexMap;
-use log::{error, info};
+use tracing::{debug, error};
 use once_cell::sync::Lazy;
 use crate::models::routing_stack::RoutingStack;
 
@@ -21,13 +21,13 @@ pub fn parse_routing_stack_list_file() -> anyhow::Result<IndexMap<String, Routin
     let routing_stacks: IndexMap<String, RoutingStack> = toml::from_str(&routing_stack_list_content)?;
 
     if routing_stacks.is_empty() {
-        info!(target: TARGET, "Routing stack list is empty");
+        debug!(target: TARGET, "Routing stack list is empty");
     }
     else {
-        info!(target: TARGET, "Found routing stack list:");
+        debug!(target: TARGET, "Found routing stack list:");
 
         for key in routing_stacks.keys() {
-            info!(target: TARGET, "- {}", key);
+            debug!(target: TARGET, "- {}", key);
         }
     }
 

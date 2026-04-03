@@ -1,13 +1,14 @@
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-use log::{info, warn};
+use std::process::{Command};
+use tracing::{info, warn};
 use crate::args::args::ExperimentSelectionArgs;
 use crate::args::plot::PlotCommand;
+use crate::models::experiment::Experiment;
 use crate::utils::files::experiments::parse_experiments_files;
 use crate::utils::files::plot_dir::PLOT_DIR_PATH;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
-use crate::utils::utils::extract_and_sort_common_parts;
+use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
 const TARGET: &str = "plot";
 
@@ -20,6 +21,7 @@ const EXTENSION: [&str; 2] = ["png", "svg"];
 
 #[derive(Debug)]
 struct ExperimentAndResults {
+    pub experiment: Experiment,
     pub experiment_keywords: Vec<String>,
     pub result_paths: Vec<PathBuf>,
 }
@@ -31,11 +33,6 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
 
     let (common_words, non_common_words) = extract_and_sort_common_parts(plot_legends);
 
-    let notes: Vec<&str> = match plot_command.plot_command.hide_note {
-        false => common_words.iter().map(|s| s.as_str()).collect(),
-        true => Vec::new(),
-    };
-
     let plot_output_directory_name = format!("merged_{}_{}", non_common_words.join("-"), common_words.join("-"));
     let plot_output_directory_path = PLOT_DIR_PATH.join(plot_output_directory_name);
 
@@ -43,9 +40,21 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
         fs::create_dir(&plot_output_directory_path)?;
     }
 
+    plot_flent(&plot_command, &plot_output_directory_path, &experiment_results, common_words)?;
+    plot_resources(&plot_output_directory_path, &experiment_results)?;
+
+    Ok(())
+}
+
+fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>, common_words: Vec<String>) -> anyhow::Result<()> {
+    let notes: Vec<&str> = match plot_command.plot_command.hide_note {
+        false => common_words.iter().map(|s| s.as_str()).collect(),
+        true => Vec::new(),
+    };
+
     let mut flent_input_files_args = Vec::new();
     let mut flent_additional_args = Vec::new();
-    
+
     let flent_legends_to_remove: Vec<String> = common_words
         .iter()
         .map(|s| [String::from("--filter-regexp"), format!("{}\\s?", s.as_str())])
@@ -53,7 +62,7 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
         .collect();
     let flent_legends_to_remove: Vec<&str> = flent_legends_to_remove.iter().map(|s| s.as_str()).collect();
 
-    for experiment in &experiment_results {
+    for experiment in experiment_results {
         for result_path in &experiment.result_paths {
             flent_input_files_args.push("-i");
             flent_input_files_args.push(result_path.to_str().unwrap());
@@ -112,6 +121,38 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>) -> anyhow::Result<()> {
+    let comparison_mode = experiment_results.len() > 1;
+
+    let output_path = plot_output_directory_path.join("memory.svg");
+    let mut args = vec![
+        concat!(env!("CARGO_MANIFEST_DIR"), "/src/utils/resource_plot.py").to_string(),
+        output_path.to_str().unwrap().to_string()
+    ];
+
+    for experiment_result in experiment_results {
+        for (router_name, node) in filter_routers(&experiment_result.experiment.network.nodes) {
+            let router_log_file_path = RESULT_DIR_PATH.join(&experiment_result.experiment.experiment_name).join(format!("{router_name}.log"));
+
+            if !router_log_file_path.exists() {
+                continue;
+            }
+
+            if comparison_mode {
+                let router = node.unwrap_router();
+                args.push(format!("{}:{}", router.os_name, router_log_file_path.display()));
+            }
+            else {
+                args.push(router_log_file_path.display().to_string());
+            }
+        }
+    }
+
+    Command::new("python").args(&args).spawn()?;
+
+    Ok(())
+}
+
 fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArgs) -> anyhow::Result<Vec<ExperimentAndResults>> {
     let experiments = parse_experiments_files(&experiment_selection)?;
 
@@ -148,6 +189,7 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
         let experiment_keywords = experiment.experiment_name.split(',').map(|k| k.to_string()).collect();
 
         let experiment_and_results = ExperimentAndResults {
+            experiment,
             experiment_keywords,
             result_paths,
         };

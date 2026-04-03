@@ -2,7 +2,7 @@ use std::{env, fs};
 use std::path::PathBuf;
 use std::process::exit;
 use indexmap::IndexMap;
-use log::{error, info};
+use tracing::{debug, error};
 use once_cell::sync::Lazy;
 use crate::models::topology::Topology;
 
@@ -21,10 +21,10 @@ pub fn parse_topologies_list_file() -> anyhow::Result<IndexMap<String, Topology>
     let topology_list: IndexMap<String, Topology> = toml::from_str(&topology_list_content)?;
 
     if topology_list.is_empty() {
-        info!(target: TARGET, "Topology list is empty");
+        debug!(target: TARGET, "Topology list is empty");
     }
     else {
-        info!(target: TARGET, "Found topology list:");
+        debug!(target: TARGET, "Found topology list:");
 
         for (key, topology) in &topology_list {
             let supported_protocol_list = topology.supported_routing_protocols
@@ -37,7 +37,7 @@ pub fn parse_topologies_list_file() -> anyhow::Result<IndexMap<String, Topology>
                 exit(1);
             }
 
-            info!(target: TARGET, "- {} ({})", key, supported_protocol_list.join(", "));
+            debug!(target: TARGET, "- {} ({})", key, supported_protocol_list.join(", "));
         }
     }
 

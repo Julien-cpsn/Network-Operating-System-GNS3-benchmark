@@ -1,19 +1,22 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use anyhow::anyhow;
 use indexmap::IndexMap;
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use pyo3::Python;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
+use tracing_subscriber::util::SubscriberInitExt;
 use crate::args::run::RunCommand;
 use crate::GUEST_IMAGE_PATH;
 use crate::models::experiment::Experiment;
 use crate::models::gns3::connector::Gns3Connector;
 use crate::models::network_stack::NetworkStack;
-use crate::models::nodes::node::{Node, NodeType};
+use crate::models::nodes::node::{NodeType};
 use crate::models::operating_system::OperatingSystem;
 use crate::models::os_command::OsCommand;
 use crate::models::routes::route::Route;
@@ -31,16 +34,19 @@ use crate::utils::gns3::node::create_node;
 use crate::utils::gns3::project::{create_project, find_and_delete_projects};
 use crate::utils::gns3::template::{find_and_delete_templates, generate_and_create_guest_template, generate_and_create_router_template};
 use crate::utils::link::create_link;
+use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger};
+use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
 use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY};
 use crate::utils::os_commands::router::{router_add_ip_address_commands, router_login_commands, router_start_network_stack_commands, router_start_routing_stack_commands, router_stop_network_stack_commands, router_stop_routing_stack_commands};
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
 use crate::utils::route::generate_distant_network_from_test;
 use crate::utils::test::test_task;
-
-const TARGET: &str = "run";
+use crate::utils::utils::{filter_guests_mut, filter_routers_mut};
 
 pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
+    const TARGET: &str = "run";
+
     harvest_env_variables();
 
     if !SHARED_DIR_PATH.exists() {
@@ -72,6 +78,14 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     find_or_upload_image(&gns3, &images_path, &GUEST_IMAGE_PATH.get().unwrap())?;
 
     for experiment in experiments {
+        let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
+        if !experiment_path.exists() {
+            fs::create_dir(&experiment_path)?;
+        }
+
+        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, &experiment.experiment_name)?;
+        let _log_guard = dispatcher.set_default();
+        
         if let Err(error) = run_experiment(&run_command, &gns3, &os_list, &network_stack_list, &routing_stack_list, &images_path, experiment).await {
             error!(target: TARGET, "{}", error);
             exit(1);
@@ -100,12 +114,13 @@ pub async fn run_experiment(
 
     find_and_delete_projects(&gns3)?;
     find_and_delete_templates(&gns3)?;
-    
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    find_and_delete_log_files(&experiment.experiment_name, &experiment.network.nodes)?;
+
+    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
         generate_and_create_guest_template(&gns3, &guest_name, &node)?;
     }
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         let router = node.unwrap_router();
         debug!(target: TARGET, "Ensuring \"{}\" operating ({}) is uploaded", router_name, router.os_name);
 
@@ -117,7 +132,7 @@ pub async fn run_experiment(
 
     let project = create_project(&gns3, &experiment.experiment_name)?;
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
@@ -127,7 +142,7 @@ pub async fn run_experiment(
         node.gns3_node = Some(gns3_node);
     }
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
         let gns3_node = create_node(&gns3, &project.project_id, guest_name, node.x, node.y)?;
         node.gns3_node = Some(gns3_node);
     }
@@ -152,7 +167,7 @@ pub async fn run_experiment(
 
     /* START */
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting guest: {}", guest_name);
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start()?;
@@ -160,7 +175,7 @@ pub async fn run_experiment(
 
     /* CONFIG */
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
         let guest = node.unwrap_guest();
         let mut config_commands = guest_config_commands(guest.ip.address());
 
@@ -169,32 +184,63 @@ pub async fn run_experiment(
             config_commands.extend(add_route_command);
         }
 
-        config_commands.push(OsCommand::new(GUEST_INPUT_READY, ""));
+        config_commands.push(OsCommand::new_line(GUEST_INPUT_READY));
 
-        execute_commands_from_node(&guest_name, node.gns3_node.as_ref().unwrap(), config_commands)?;
+        execute_commands_from_node(
+            &experiment.experiment_name,
+            &guest_name,
+            node.gns3_node.as_ref().unwrap(),
+            config_commands,
+            Some(4_000),
+            None
+        )?;
     }
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting router: {}", router_name);
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start()?;
 
-        // Network stack setup
+        // Login
 
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
         let network_stack = network_stacks.get(&os.network_stack).ok_or_else(|| anyhow!("No network stack found for {}", os.network_stack))?;
 
         let login_commands = router_login_commands(&os);
+
+        execute_commands_from_node(
+            &experiment.experiment_name,
+            &router_name,
+            &gns3_node,
+            login_commands,
+            Some(180_000),
+            None
+        )?;
+
+        // Skip all commands
+        if run_command.run_command.os_setup {
+            continue;
+        }
+
+        // Network stack setup
+
         let start_network_stack_commands = router_start_network_stack_commands(&os, &network_stack);
         let stop_network_stack_commands = router_stop_network_stack_commands(&os, &network_stack);
         let mut add_ip_address_commands = Vec::new();
+        let mut static_routes_commands = Vec::new();
 
         for (index, nic) in &router.nics {
-            add_ip_address_commands.extend(router_add_ip_address_commands(&os, &network_stack, &index, nic.ip_address.address())?);
+            add_ip_address_commands.extend(router_add_ip_address_commands(&os, &network_stack, &index, &nic.nic_type, &nic.ip_address)?);
         }
 
-        add_ip_address_commands.push(OsCommand::new(&os.input_ready, ""));
+        for route in &router.routes {
+            if let Route::Static(static_route) = route {
+                let nic = router.nics.get(static_route.interface.to_string().as_str()).ok_or_else(|| anyhow!("NIC index {} found in router \"{}\"", &static_route.interface, &router_name))?;
+
+                static_routes_commands.extend(router_add_static_route_commands(&os, &network_stack, &static_route, &nic.nic_type)?);
+            }
+        }
 
         // Routing stack setup
 
@@ -216,37 +262,67 @@ pub async fn run_experiment(
 
         for route in &router.routes {
             let commands = match route {
-                Route::Static(static_route) => router_add_static_route_commands(&os, &network_stack, &static_route)?,
                 Route::Rip(_rip_route) => Vec::new(),
                 Route::Ospf => Vec::new(),
                 Route::Bgp => Vec::new(),
-                Route::Mpls => Vec::new()
+                Route::Mpls => Vec::new(),
+                // Handled before
+                _ => Vec::new()
             };
 
             routing_commands.extend(commands);
         }
 
-        routing_commands.push(OsCommand::new(&os.input_ready, ""));
-
         // Send commands
 
         let commands = vec![
-            login_commands,
             start_network_stack_commands,
-            start_routing_stack_commands,
             add_ip_address_commands,
+            static_routes_commands,
+            start_routing_stack_commands,
             routing_commands,
             stop_routing_stack_commands,
             stop_network_stack_commands
         ]
             .concat();
 
-        execute_commands_from_node(&router_name, &gns3_node, commands)?;
+        execute_commands_from_node(
+            &experiment.experiment_name,
+            &router_name,
+            &gns3_node,
+            commands,
+            Some(4_000),
+            None
+        )?;
+    }
+
+    /* MONITOR ROUTER */
+
+    let stop_monitoring = Arc::new(AtomicBool::new(false));
+    let mut monitor_threads = JoinSet::new();
+
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+        let router  = node.unwrap_router();
+        let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
+
+        if let Some(monitor) = &os.resources_monitor_commands {
+            let gns3_node = node.gns3_node.as_ref().unwrap();
+
+            monitor_threads.spawn(monitor_task(
+                experiment.experiment_name.clone(),
+                router_name.clone(),
+                gns3_node.console_host(),
+                gns3_node.console(),
+                os.input_ready.clone(),
+                monitor.iter().map(|c| c.to_os_command(&os, None)).collect(),
+                stop_monitoring.clone()
+            ));
+        }
     }
 
     /* RUN */
 
-    let mut threads = JoinSet::new();
+    let mut test_threads = JoinSet::new();
 
     for test in experiment.test_batch {
         let (from_node_name, from_node) = experiment.network.nodes.get_key_value(&test.from).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", test.from, &test.name))?;
@@ -259,7 +335,7 @@ pub async fn run_experiment(
         let gns3_node = from_node.gns3_node.as_ref().unwrap();
         let to_node_ip = to_node.unwrap_guest().ip.address();
 
-        threads.spawn(test_task(
+        test_threads.spawn(test_task(
             experiment.experiment_name.clone(),
             test.clone(),
             from_node_name.to_owned(),
@@ -269,7 +345,11 @@ pub async fn run_experiment(
         ));
     }
 
-    threads.join_all().await;
+    test_threads.join_all().await;
+
+    stop_monitoring.store(true, Ordering::Relaxed);
+
+    monitor_threads.join_all().await;
 
     /* STOP */
 
@@ -290,24 +370,4 @@ pub async fn run_experiment(
     }
 
     Ok(())
-}
-
-pub fn filter_guests(nodes: &mut IndexMap<String, Node>) -> IndexMap<&String, &mut Node> {
-    nodes
-        .iter_mut()
-        .filter(|(_, n)| match n.node_type {
-            NodeType::Guest(_) => true,
-            _ => false,
-        })
-        .collect()
-}
-
-pub fn filter_routers(nodes: &mut IndexMap<String, Node>) -> IndexMap<&String, &mut Node> {
-    nodes
-        .iter_mut()
-        .filter(|(_, n)| match n.node_type {
-            NodeType::Router(_) => true,
-            _ => false,
-        })
-        .collect()
 }

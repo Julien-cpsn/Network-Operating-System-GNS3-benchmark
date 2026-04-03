@@ -4,7 +4,7 @@ use crate::models::nodes::router::Router;
 use crate::utils::os_commands::guest::GUEST_NIC_INDEX;
 use anyhow::anyhow;
 use cidr::Ipv4Cidr;
-use log::debug;
+use tracing::debug;
 
 const TARGET: &str = "route";
 

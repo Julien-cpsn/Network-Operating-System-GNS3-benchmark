@@ -1,19 +1,19 @@
-mod models;
-mod utils;
-mod args;
-mod commands;
+pub(crate) mod models;
+pub(crate) mod utils;
+pub(crate) mod args;
+pub(crate) mod commands;
 
 use crate::commands::generate::generate;
 use crate::commands::run::run;
-use log::{info, LevelFilter};
+use tracing::{info};
 use once_cell::sync::{Lazy, OnceCell};
 use std::path::PathBuf;
 use clap::Parser;
 use futures::{FutureExt};
 use crate::args::args::{Args, Command};
 use crate::args::generate::GenerateSubcommand;
-use crate::args::run::RunCommand;
 use crate::commands::plot::plot;
+use crate::utils::log::setup_global_logger;
 
 pub static ARGS: Lazy<Args> = Lazy::new(|| Args::parse());
 
@@ -26,9 +26,7 @@ pub static GUEST_IMAGE_PATH: OnceCell<PathBuf> = OnceCell::new();
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-    env_logger::builder()
-        .filter_level(LevelFilter::Debug)
-        .init();
+    setup_global_logger()?;
 
     handle_command(&ARGS.command).await?;
 
@@ -42,13 +40,8 @@ async fn handle_command(command: &Command) -> anyhow::Result<()> {
         Command::Generate(generate_command) => {
             generate(generate_command.clone())?;
 
-            if let GenerateSubcommand::Run(run_command_args) = &generate_command.command {
-                let run_command = RunCommand {
-                    experiment_selection: generate_command.experiment_selection.clone(),
-                    run_command: run_command_args.clone(),
-                };
-
-                handle_command(&Command::Run(run_command)).boxed_local().await?;
+            if let GenerateSubcommand::Run(run_command) = &generate_command.command {
+                handle_command(&Command::Run(run_command.clone())).boxed_local().await?;
             }
         },
         Command::Run(run_command) => run(run_command.clone()).await?,

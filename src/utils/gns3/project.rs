@@ -1,4 +1,4 @@
-use log::debug;
+use tracing::debug;
 use crate::GNS3_PROJECT_PREFIX;
 use crate::models::gns3::connector::Gns3Connector;
 use crate::models::gns3::project::Gns3Project;

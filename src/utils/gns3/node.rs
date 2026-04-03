@@ -1,4 +1,4 @@
-use log::debug;
+use tracing::debug;
 use crate::models::gns3::connector::Gns3Connector;
 use crate::models::gns3::node::Gns3Node;
 use crate::utils::gns3::template::template_name;

@@ -18,4 +18,8 @@ pub struct RunCommandArgs {
     /// Do not stop GNS3 nodes after the end of the experiment
     #[arg(long)]
     pub no_stop: bool,
+    
+    /// Does not input any command inside the router in order to set it up and test commands yourself
+    #[arg(long)]
+    pub os_setup: bool
 }

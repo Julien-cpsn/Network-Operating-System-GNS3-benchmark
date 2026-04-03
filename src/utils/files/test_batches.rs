@@ -2,7 +2,7 @@ use std::{env, fs};
 use std::path::PathBuf;
 use std::process::exit;
 use indexmap::IndexMap;
-use log::{error, info};
+use tracing::{debug, error};
 use once_cell::sync::Lazy;
 use crate::models::test::Test;
 
@@ -21,15 +21,15 @@ pub fn parse_test_batch_list_file() -> anyhow::Result<IndexMap<String, Vec<Test>
     let test_batch_list: IndexMap<String, Vec<Test>> = toml::from_str(&test_batch_list_content)?;
 
     if test_batch_list.is_empty() {
-        info!(target: TARGET, "Test list is empty");
+        debug!(target: TARGET, "Test batch list is empty");
     }
     else {
-        info!(target: TARGET, "Found test batch list:");
+        debug!(target: TARGET, "Found test batch list:");
 
         for (key, test_batch) in &test_batch_list {
-            info!(target: TARGET, "\t- {}", key);
+            debug!(target: TARGET, "\t- {}", key);
             for test in test_batch {
-                info!(target: TARGET, "\t- {} (test: {}, fire at: {}, duration: {})", test.name, test.test, test.fire_at, test.duration);
+                debug!(target: TARGET, "\t- {} (test: {}, fire at: {}, duration: {})", test.name, test.test, test.fire_at, test.duration);
             }
         }
     }

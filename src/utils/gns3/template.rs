@@ -1,4 +1,4 @@
-use log::{debug, warn};
+use tracing::{debug, warn};
 use uuid::Uuid;
 use crate::{GNS3_TEMPLATE_PREFIX, GUEST_IMAGE_PATH};
 use crate::models::gns3::connector::Gns3Connector;
@@ -95,7 +95,7 @@ pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &s
         default_name_format: String::from("{name}-{0}"),
         compute_id: Some(String::from("local")),
         template_type: TemplateType::Qemu(Gns3QemuTemplate {
-            adapter_type: router.nics.values().into_iter().next().unwrap().nic_type.to_string(), // TODO: can be improved
+            adapter_type: router.nics.values().into_iter().next().unwrap().nic_type.to_qemu_name(), // TODO: can be improved
             adapters: router.number_nics,
             custom_adapters: vec![],
             cpus: node.vcpu,
@@ -131,7 +131,7 @@ pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &s
             initrd: String::new(),
             tpm: false,
             uefi: false,
-            options: String::new(),
+            options: String::from("-mem-prealloc"),
             usage: String::new(),
         }),
     };

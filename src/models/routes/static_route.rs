@@ -6,5 +6,5 @@ use serde::{Deserialize, Serialize};
 pub struct StaticRoute {
     pub distant_network: Ipv4Cidr,
     pub gateway: Ipv4Addr,
-    pub interface: u32,
+    pub interface: u16,
 }

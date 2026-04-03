@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use clap_verbosity_flag::Verbosity;
 use strum::Display;
 use crate::args::generate::GenerateCommand;
 use crate::args::plot::PlotCommand;
@@ -11,7 +12,10 @@ use crate::models::protocol::RoutingProtocol;
 #[command(version, about)]
 pub struct Args {
     #[command(subcommand)]
-    pub command: Command
+    pub command: Command,
+
+    #[command(flatten)]
+    pub verbosity: Verbosity
 }
 
 #[derive(Debug, Clone, Subcommand, Display)]

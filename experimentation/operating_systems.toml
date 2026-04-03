@@ -1,21 +1,82 @@
+[BSDRP_BIRD2]
+    input_ready = ":~"
+    login = "root"
+    #password = null
+    network_stack = "FreeBSD network stack"
+    routing_stack = "BIRD2"
+    interface_prefix = [
+        ["E1000", "em"],
+        ["RTL8139", "re"],
+        ["VirtIO", "vtnet"]
+    ]
+    interfaces_start_at = 0
+    image_path = "/home/julien/Programmation/vm/BSDRP/BSDRP-1.993-full-amd64-serial.img"
+    resources_monitor_commands = [
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" &&
+while true
+do
+   vmstat -H | awk 'FNR == 3 {printf("%s\\t%s\\t%s\\n", int($5/1000000), int(($5-$4)/1000000), int($4/1000000))}' && sleep 1
+done\n""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
+
 [Debian]
-input_ready = ":~"
-#trigger_sequence = null
-login = "root"
-password = "debian"
-network_stack = "Linux network stack"
-#routing_stack = null
-interface_prefix = "ens"
-interfaces_start_at = 3
-image_path = "/home/julien/Programmation/vm/Debian/tmp/debian-bookworm.qcow2"
+    input_ready = ":~"
+    login = "root"
+    password = "debian"
+    network_stack = "Linux network stack"
+    #routing_stack = null
+    interface_prefix = "ens"
+    interfaces_start_at = 3
+    image_path = "/home/julien/Programmation/vm/Debian/tmp/debian-bookworm.qcow2"
+    resources_monitor_commands = [
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" > monitoring.txt &&
+while true
+do
+   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\n", $2, $7, $3)}' && sleep 1
+done >> monitoring.txt &\n""",
+        { expect = "", wait = 60_000_000 },
+        "cat monitoring.txt",
+        ""
+    ]
 
 [MikroTik]
-input_ready = "[admin@MikroTik] >"
-#trigger_sequence = null
-login = "admin"
-password = "test"
-network_stack = "MikroTik network stack"
-routing_stack = "MikroTik routing stack"
-interface_prefix = "ether"
-interfaces_start_at =  1
-image_path = "/home/julien/Programmation/vm/MikroTik/chr-6.49.18.img"
+    input_ready = "[admin@MikroTik] >"
+    login = "admin"
+    password = "test"
+    network_stack = "MikroTik network stack"
+    routing_stack = "MikroTik routing stack"
+    interface_prefix = "ether"
+    interfaces_start_at =  1
+    image_path = "/home/julien/Programmation/vm/MikroTik/chr-6.49.18.img"
+
+[SONiC]
+    input_ready = ":~"
+    login = "admin"
+    password = "YourPaSsWoRd"
+    network_stack = "SONiC CLI"
+    routing_stack = "FRR"
+    interface_prefix = "Ethernet"
+    interfaces_start_at = -1
+    gap_between_interfaces = 4
+    image_path = "/home/julien/Programmation/vm/SONiC/sonic-vs-2025-05.img"
+    resources_monitor_commands = [
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" &&
+while true
+do
+   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\n", $2, $7, $3)}' && sleep 1
+done\n""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
+
+[VyOS]
+    input_ready = ":~"
+    login = "vyos"
+    password = "vyos"
+    network_stack = "Linux network stack"
+    routing_stack = "FRR"
+    interface_prefix = "eth"
+    interfaces_start_at = 0
+    image_path = "/home/julien/Programmation/vm/VyOS/vyos-2025.04.04-0018-rolling-generic-amd64.iso"

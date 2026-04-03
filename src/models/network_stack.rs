@@ -1,9 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use crate::models::os_command::DeserializedOsCommandType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct NetworkStack {
-    pub start: Vec<String>,
-    pub add_ip_address: Vec<String>,
-    pub add_static_route: Vec<String>,
-    pub stop: Vec<String>,
+    pub start: Vec<DeserializedOsCommandType>,
+    pub add_ip_address: Vec<DeserializedOsCommandType>,
+    pub add_static_route: Vec<DeserializedOsCommandType>,
+    pub stop: Vec<DeserializedOsCommandType>,
 }

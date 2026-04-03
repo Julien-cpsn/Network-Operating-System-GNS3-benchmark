@@ -5,12 +5,14 @@ edition = "2024"
 license-file = "LICENSE"
 
 [dependencies]
-tokio = { version = "1.50.0",features = ["rt", "rt-multi-thread", "macros", "time"]}
+tokio = { version = "1.51.0",features = ["rt", "rt-multi-thread", "macros", "time"]}
 futures = "0.3.32"
+
+pyo3 = { version = "0.28.3", features = ["auto-initialize", "anyhow", "serde", "experimental-async", "chrono"] }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde-pyobject = "0.8.0"
-toml = "1.0.6"
+toml = "1.1.0"
 serde_json = "1.0.149"
 
 dotenv = "0.15.0"
@@ -20,15 +22,16 @@ cidr = { version = "0.3.2", features = ["serde"] }
 rexpect = "0.7.0"
 
 clap = { version = "4.6.0", features = ["derive", "color"] }
+clap-verbosity-flag = { version = "3.0.4", features = ["tracing"] }
 
 anyhow = "1.0.102"
 expanduser = "1.2.2"
 once_cell = "1.21.4"
-log = "0.4.29"
-env_logger = "0.11.9"
 strum = { version = "0.28.0", features = ["derive", "strum_macros"] }
-indexmap = { version = "2.13.0", features = ["serde"] }
+indexmap = { version = "2.13.1", features = ["serde"] }
 walkdir = "2.5.0"
-uuid = { version = "1.22.0", features = ["v4"] }
+uuid = { version = "1.23.0", features = ["v4"] }
 
-pyo3 = { version = "0.28.2", features = ["auto-initialize", "anyhow", "serde", "experimental-async"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["chrono", "fmt"] }
+tracing-appender = "0.2.4"

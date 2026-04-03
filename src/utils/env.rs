@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use dotenv::dotenv;
-use log::error;
+use tracing::error;
 use crate::{GNS3_PROJECT_PREFIX, GNS3_SERVER_PASSWORD, GNS3_SERVER_URL, GNS3_SERVER_USERNAME, GNS3_TEMPLATE_PREFIX, GUEST_IMAGE_PATH};
 
 pub fn harvest_env_variables() {

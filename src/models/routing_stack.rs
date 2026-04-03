@@ -1,7 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use crate::models::os_command::DeserializedOsCommandType;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct RoutingStack {
-    pub start: Vec<String>,
-    pub stop: Vec<String>,
+    pub start: Vec<DeserializedOsCommandType>,
+    pub stop: Vec<DeserializedOsCommandType>,
 }

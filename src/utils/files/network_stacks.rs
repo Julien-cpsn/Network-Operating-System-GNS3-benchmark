@@ -2,7 +2,7 @@ use std::{env, fs};
 use std::path::{PathBuf};
 use std::process::exit;
 use indexmap::IndexMap;
-use log::{error, info};
+use tracing::{debug, error};
 use once_cell::sync::Lazy;
 use crate::models::network_stack::NetworkStack;
 
@@ -21,13 +21,13 @@ pub fn parse_network_stack_list_file() -> anyhow::Result<IndexMap<String, Networ
     let network_stacks: IndexMap<String, NetworkStack> = toml::from_str(&network_stack_list_content)?;
 
     if network_stacks.is_empty() {
-        info!(target: TARGET, "Network stack list is empty");
+        debug!(target: TARGET, "Network stack list is empty");
     }
     else {
-        info!(target: TARGET, "Found network stack list:");
+        debug!(target: TARGET, "Found network stack list:");
 
         for key in network_stacks.keys() {
-            info!(target: TARGET, "- {}", key);
+            debug!(target: TARGET, "- {}", key);
         }
     }
 

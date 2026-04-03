@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use log::{info};
+use tracing::{info};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_pyobject::{from_pyobject, pydict, to_pyobject};

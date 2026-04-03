@@ -1,3 +1,19 @@
+["BIRD2"]
+    start = []
+    stop = []
+
+["FRR"]
+    start = [
+        #"sudo vtysh",
+        #{ expect = "# ", send = "configure terminal", can_fail = true },
+    ]
+    stop = [
+        #{ expect = "(config)# ", send = "exit", can_fail = true },
+        #{ expect = "# ", send = "write memory", can_fail = true },
+        #{ expect = "# ", send = "end", can_fail = true },
+        #{ expect = "# ", send = "exit", can_fail = true },
+    ]
+
 ["MikroTik routing stack"]
-start = []
-stop = []
+    start = []
+    stop = []

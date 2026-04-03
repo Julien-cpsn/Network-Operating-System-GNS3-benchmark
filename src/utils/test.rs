@@ -6,22 +6,38 @@ use crate::utils::os_commands::guest::{guest_test_commands, GUEST_INPUT_READY};
 use std::fs;
 use std::net::Ipv4Addr;
 use std::time::Duration;
-use log::{info, warn};
+use tracing::{info, warn};
 use tokio::time::sleep;
 use walkdir::{DirEntry, WalkDir};
 use crate::models::os_command::OsCommand;
 
 const TARGET: &str = "test";
 
-pub async fn test_task(experiment_name: String, test: Test, from_node_name: String, console_host: String, console: u32, to_node_ip: Ipv4Addr) -> anyhow::Result<()> {
+pub async fn test_task(
+    experiment_name: String,
+    test: Test,
+    from_node_name: String,
+    console_host: String,
+    console: u32,
+    to_node_ip: Ipv4Addr
+) -> anyhow::Result<()> {
     sleep(Duration::from_secs(test.fire_at)).await;
+
 
     info!(target: TARGET, "Running test: {} (duration: {})", &test.name, &test.duration);
 
     let mut test_commands = guest_test_commands(&experiment_name, &test, to_node_ip);
-    test_commands.push(OsCommand::new(GUEST_INPUT_READY, ""));
+    test_commands.push(OsCommand::new_line(GUEST_INPUT_READY));
 
-    execute_commands(&from_node_name, &console_host, console, test_commands)?;
+    execute_commands(
+        &experiment_name,
+        &from_node_name,
+        &console_host,
+        console,
+        test_commands,
+        Some(180_000),
+        None
+    )?;
 
     let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
 

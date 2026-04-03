@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use log::{debug};
+use tracing::{debug};
 use crate::models::gns3::connector::Gns3Connector;
 
 

@@ -1,36 +1,36 @@
 [Simple]
 
-supported_routing_protocols = ["static", "RIP"]
+    supported_routing_protocols = ["static", "RIP"]
 
-[Simple.network]
-physical_links = [
-    { node_a = "Client", adapter_a = 0, node_b = "Router", adapter_b = 3 },
-    { node_a = "Server", adapter_a = 0, node_b = "Router", adapter_b = 4 },
-]
+    [Simple.network]
+    physical_links = [
+        { node_a = "Client", adapter_a = 0, node_b = "Router", adapter_b = 3 },
+        { node_a = "Server", adapter_a = 0, node_b = "Router", adapter_b = 4 },
+    ]
 
-[Simple.network.nodes.Client]
-vcpu = 2
-ram = 2048
-ip = "10.0.1.2/24"
-x = -200
-y = 0
+    [Simple.network.nodes.Client]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.1.2/24"
+    x = -200
+    y = 0
 
-[Simple.network.nodes.Server]
-vcpu = 2
-ram = 2048
-ip = "10.0.2.2/24"
-x = 200
-y = 0
+    [Simple.network.nodes.Server]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.2.2/24"
+    x = 200
+    y = 0
 
-[Simple.network.nodes.Router]
-number_nics = 6
-ips = { 3 = "10.0.1.1/24", 4 = "10.0.2.1/24" }
-x = 0
-y = 5
+    [Simple.network.nodes.Router]
+    number_nics = 6
+    ips = { 3 = "10.0.1.1/24", 4 = "10.0.2.1/24" }
+    x = 0
+    y = 5
 
-[Simple.network.nodes.Router.routes]
-static = [
-    { distant_network = "10.0.1.0/24", gateway = "10.0.1.1", interface = 3 },
-    { distant_network = "10.0.2.0/24", gateway = "10.0.2.1", interface = 4 },
-]
-RIP = []
+    [Simple.network.nodes.Router.routes]
+    static = [
+        { distant_network = "10.0.1.0/24", gateway = "10.0.1.1", interface = 3 },
+        { distant_network = "10.0.2.0/24", gateway = "10.0.2.1", interface = 4 },
+    ]
+    RIP = []

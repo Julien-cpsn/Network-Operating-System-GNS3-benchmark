@@ -1,4 +1,48 @@
 use std::collections::HashSet;
+use indexmap::IndexMap;
+use crate::models::nodes::node::{Node, NodeType};
+
+pub fn filter_guests_mut(nodes: &mut IndexMap<String, Node>) -> IndexMap<&String, &mut Node> {
+    nodes
+        .iter_mut()
+        .filter(|(_, n)| match n.node_type {
+            NodeType::Guest(_) => true,
+            _ => false,
+        })
+        .collect()
+}
+
+#[allow(unused)]
+pub fn filter_guests(nodes: &IndexMap<String, Node>) -> IndexMap<&String, &Node> {
+    nodes
+        .iter()
+        .filter(|(_, n)| match n.node_type {
+            NodeType::Guest(_) => true,
+            _ => false,
+        })
+        .collect()
+}
+
+pub fn filter_routers_mut(nodes: &mut IndexMap<String, Node>) -> IndexMap<&String, &mut Node> {
+    nodes
+        .iter_mut()
+        .filter(|(_, n)| match n.node_type {
+            NodeType::Router(_) => true,
+            _ => false,
+        })
+        .collect()
+}
+
+
+pub fn filter_routers(nodes: &IndexMap<String, Node>) -> IndexMap<&String, &Node> {
+    nodes
+        .iter()
+        .filter(|(_, n)| match n.node_type {
+            NodeType::Router(_) => true,
+            _ => false,
+        })
+        .collect()
+}
 
 pub fn extract_and_sort_common_parts(strings: Vec<&Vec<String>>) -> (Vec<String>, Vec<String>) {
     if strings.len() == 1 {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use expanduser::expanduser;
 use ini::Ini;
-use log::{debug, error};
+use tracing::{debug, error};
 
 
 const TARGET: &str = "GNS3 config";

@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::exit;
 use indexmap::IndexMap;
-use log::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use strum::VariantArray;
 use crate::args::generate::{GenerateCommand, GenerateSubcommand};
 use crate::models::experiment::Experiment;
@@ -28,26 +28,31 @@ const TARGET: &str = "generate";
 
 
 pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
+    let experiment_selection = match &generate_command.command {
+        GenerateSubcommand::Run(run_command) => &run_command.experiment_selection,
+        GenerateSubcommand::Files { experiment_selection, .. } => &experiment_selection
+    };
+
     let network_stack_list = parse_network_stack_list_file()?;
     let routing_stack_list = parse_routing_stack_list_file()?;
     let os_list = parse_os_list_file(network_stack_list.keys().collect(), routing_stack_list.keys().collect())?;
-    let oses_to_use = get_oses_to_use(generate_command.experiment_selection.os, os_list);
+    let oses_to_use = get_oses_to_use(&experiment_selection.os, os_list);
 
     let test_batch_list = parse_test_batch_list_file()?;
-    let test_batches_to_use = get_test_batches_to_use(generate_command.experiment_selection.test_batch, test_batch_list);
+    let test_batches_to_use = get_test_batches_to_use(&experiment_selection.test_batch, test_batch_list);
 
-    let resources_to_use = match generate_command.experiment_selection.resources {
+    let resources_to_use = match &experiment_selection.resources {
         None => HardwareResources::VARIANTS.to_vec(),
-        Some(resources) => vec![resources],
+        Some(resources) => vec![resources.to_owned()],
     };
 
-    let nic_types_to_use = match generate_command.experiment_selection.nic {
+    let nic_types_to_use = match &experiment_selection.nic {
         None => NicType::VARIANTS.to_vec(),
-        Some(nic_type) => vec![nic_type],
+        Some(nic_type) => vec![nic_type.to_owned()],
     };
 
     let topology_list = parse_topologies_list_file()?;
-    let topologies_to_use = get_topologies_to_use(generate_command.experiment_selection.topology, topology_list, generate_command.experiment_selection.protocol);
+    let topologies_to_use = get_topologies_to_use(&experiment_selection.topology, topology_list, &experiment_selection.protocol);
 
     if oses_to_use.is_empty() || test_batches_to_use.is_empty() || topologies_to_use.is_empty() {
         warn!(target: TARGET, "At least of the lists is empty, no experiment will be generated");
@@ -66,13 +71,16 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
         info!(target: TARGET, "Total of {} individual experiment",  experiment_count);
     }
 
-    let override_ = match generate_command.command {
-        GenerateSubcommand::Files { override_, .. } => override_,
+    let override_ = match &generate_command.command {
+        GenerateSubcommand::Files { override_, .. } => *override_,
         _ => false
     };
 
     if override_ == true {
-        warn!(target: TARGET, "Override is set, existing experiment will be overridden");
+        warn!(target: TARGET, "Override is set, existing experiment will be overwritten");
+    }
+    else {
+        warn!(target: TARGET, "Override is not set, existing experiment will NOT be overwritten");
     }
 
     let experiment_dir = create_dir_if_does_not_exist(EXPERIMENTS_PATH.clone())?;
@@ -96,7 +104,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                             let routing_protocol_dir = create_dir_if_does_not_exist(topology_dir.join(routing_protocol.to_string()))?;
                             let experiment_path = routing_protocol_dir.join("experiment.json");
 
-                            debug!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
+                            info!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
 
                             if experiment_path.exists() && override_ == false {
                                 continue;
@@ -183,36 +191,36 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_oses_to_use(command_os: Option<String>, mut os_list: IndexMap<String, OperatingSystem>) -> IndexMap<String, OperatingSystem> {
-    if let Some(os_name) = command_os {
-        if !os_list.contains_key(&os_name) {
+fn get_oses_to_use(command_os: &Option<String>, mut os_list: IndexMap<String, OperatingSystem>) -> IndexMap<String, OperatingSystem> {
+    if let Some(os_name) = &command_os {
+        if !os_list.contains_key(os_name) {
             error!(target: TARGET, "{} was not found in \"{}\"", os_name, OS_LIST_PATH.display());
             exit(1);
         }
 
-        os_list.retain(|os_name, _| os_name == os_name);
+        os_list.retain(|o, _| o == os_name);
     }
 
     os_list
 }
 
-fn get_test_batches_to_use(command_test: Option<String>, mut test_list: IndexMap<String, Vec<Test>>) -> IndexMap<String, Vec<Test>> {
-   if let Some(test) = command_test {
-       if !test_list.contains_key(&test) {
+fn get_test_batches_to_use(command_test: &Option<String>, mut test_list: IndexMap<String, Vec<Test>>) -> IndexMap<String, Vec<Test>> {
+   if let Some(test) = &command_test {
+       if !test_list.contains_key(test) {
            error!(target: TARGET, "{} was not found in \"{}\"", test, TEST_BATCH_LIST_PATH.display());
            exit(1);
        }
 
-       test_list.retain(|t, _| t == &test);
+       test_list.retain(|t, _| t == test);
    }
 
     test_list
 }
 
-fn get_topologies_to_use(command_topology: Option<String>, topology_list: IndexMap<String, Topology>, command_routing_protocol: Option<RoutingProtocol>) -> IndexMap<String, Topology> {
-    let mut topology_list = match command_topology {
+fn get_topologies_to_use(command_topology: &Option<String>, topology_list: IndexMap<String, Topology>, command_routing_protocol: &Option<RoutingProtocol>) -> IndexMap<String, Topology> {
+    let mut topology_list = match &command_topology {
         None => topology_list,
-        Some(topology) => match topology_list.get_key_value(&topology) {
+        Some(topology) => match topology_list.get_key_value(topology) {
             Some(topology) => IndexMap::from([(topology.0.to_owned(), topology.1.to_owned())]),
             None => {
                 error!(target: TARGET, "{} was not found in \"{}\"", topology, TOPOLOGIES_LIST_PATH.display());
@@ -228,7 +236,7 @@ fn get_topologies_to_use(command_topology: Option<String>, topology_list: IndexM
                 exit(1);
             }
 
-            topology.supported_routing_protocols.retain(|v| v == &routing_protocol);
+            topology.supported_routing_protocols.retain(|r| r == routing_protocol);
         }
     }
 

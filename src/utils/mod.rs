@@ -1,9 +1,10 @@
 pub mod gns3;
 pub mod env;
 pub mod files;
-pub mod nic;
 pub mod route;
 pub mod link;
 pub mod os_commands;
 pub mod test;
 pub mod utils;
+pub mod log;
+pub mod monitor;
