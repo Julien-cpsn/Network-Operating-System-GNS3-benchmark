@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool};
-use tracing::{info};
+use tracing::{error, info};
 use crate::models::os_command::OsCommand;
 use crate::utils::os_commands::execute::execute_commands;
 
@@ -19,7 +19,7 @@ pub async fn monitor_task(
 
     monitor_command.push(OsCommand::new_line(&input_ready));
 
-    execute_commands(
+    if let Err(err) = execute_commands(
         &experiment_name,
         &router_name,
         &console_host,
@@ -27,7 +27,11 @@ pub async fn monitor_task(
         monitor_command,
         Some(900),
         Some(stop_monitoring)
-    )?;
+    ) {
+        error!(target: TARGET, "{:?}", err);
+    }
+    
+    info!(target: TARGET, "End monitoring: {}", &router_name);
 
     Ok(())
 }

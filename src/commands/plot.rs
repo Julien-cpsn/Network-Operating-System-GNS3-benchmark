@@ -124,7 +124,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
 fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>) -> anyhow::Result<()> {
     let comparison_mode = experiment_results.len() > 1;
 
-    let output_path = plot_output_directory_path.join("memory.svg");
+    let output_path = plot_output_directory_path.join("resources.svg");
     let mut args = vec![
         concat!(env!("CARGO_MANIFEST_DIR"), "/src/utils/resource_plot.py").to_string(),
         output_path.to_str().unwrap().to_string()

@@ -3,8 +3,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use anyhow::anyhow;
+use rexpect::error::Error;
 use tracing::{debug, dispatcher, trace};
-use rexpect::session::Options;
+use rexpect::session::{Options, PtySession};
 use crate::models::gns3::node::Gns3Node;
 use crate::models::os_command::{OsCommand, SendType};
 use crate::utils::log::setup_experiment_logger;
@@ -75,11 +77,11 @@ pub fn execute_commands(
                     break 'timeout_loop;
                 }
                 else if command.can_fail {
-                    trace!(target: "rx", "{}", telnet.read_line()?);
+                    trace_telnet_output(&mut telnet)?;
                     break 'timeout_loop;
                 }
                 else {
-                    trace!(target: "rx", "{}", telnet.read_line()?);
+                    trace_telnet_output(&mut telnet)?;
 
                     if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
                         trace!(target: TARGET, "remote stop");
@@ -110,7 +112,7 @@ pub fn execute_commands(
                     let to_wait = Duration::from_millis(*time_ms);
 
                     'wait_loop: while now.elapsed() < to_wait {
-                        trace!(target: "rx", "{}", telnet.read_line()?);
+                        trace_telnet_output(&mut telnet)?;
                         sleep(Duration::from_millis(100));
 
                         if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
@@ -122,13 +124,26 @@ pub fn execute_commands(
             };
         }
 
+        debug!(target: TARGET, "End commands for {}", node_name);
+
         //let _ = telnet.send_line("");
         let _ = telnet.flush();
 
         telnet.process_mut().exit()?;
 
-        debug!(target: TARGET, "End commands for {}", node_name);
-
         Ok(())
     })
+}
+
+fn trace_telnet_output(telnet: &mut PtySession) -> anyhow::Result<()> {
+    match telnet.read_line() {
+        Ok(text) => {
+            trace!(target: "rx", "{}", text);
+            Ok(())
+        }
+        Err(error) => match error {
+            Error::Timeout { .. } => Ok(()),
+            _ => Err(anyhow!(error)),
+        }
+    }
 }

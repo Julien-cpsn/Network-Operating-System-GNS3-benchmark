@@ -12,11 +12,11 @@
     interfaces_start_at = 0
     image_path = "/home/julien/Programmation/vm/BSDRP/BSDRP-1.993-full-amd64-serial.img"
     resources_monitor_commands = [
-        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" &&
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
 while true
 do
-   vmstat -H | awk 'FNR == 3 {printf("%s\\t%s\\t%s\\n", int($5/1000000), int(($5-$4)/1000000), int($4/1000000))}' && sleep 1
-done\n""",
+   vmstat -H | awk 'FNR == 3 {printf("%s\\t%s\\t%s\\t", int($5/1000000), int(($5-$4)/1000000), int($4/1000000))}' && top -d 1 0 | awk '/CPU:  /{printf("%s\\n", substr($2, 1, length($2)-1))}' && sleep 1
+done""",
         { expect = "", wait = 60_000_000 },
         { expect = "", control = 'c' }
     ]
@@ -31,14 +31,13 @@ done\n""",
     interfaces_start_at = 3
     image_path = "/home/julien/Programmation/vm/Debian/tmp/debian-bookworm.qcow2"
     resources_monitor_commands = [
-        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" > monitoring.txt &&
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
 while true
 do
-   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\n", $2, $7, $3)}' && sleep 1
-done >> monitoring.txt &\n""",
+   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
+done""",
         { expect = "", wait = 60_000_000 },
-        "cat monitoring.txt",
-        ""
+        { expect = "", control = 'c' }
     ]
 
 [MikroTik]
@@ -50,6 +49,29 @@ done >> monitoring.txt &\n""",
     interface_prefix = "ether"
     interfaces_start_at =  1
     image_path = "/home/julien/Programmation/vm/MikroTik/chr-6.49.18.img"
+    resources_monitor_commands = [
+        """{\r\n
+    :put ("Total (MiB)    Free (MiB)    Used (MiB)    CPU (perc)")\r\n
+    :while (true) do={\r\n
+        :local total [/system resource get total-memory]\r\n
+        :local free [/system resource get free-memory]\r\n
+        :local used ($total - $free)\r\n
+        :local cpu [/system resource get cpu-load]\r\n
+
+        :local totalMiB (($total * 10) / 1048576)\r\n
+        :local freeMiB  (($free * 10) / 1048576)\r\n
+        :local usedMiB  (($used * 10) / 1048576)\r\n
+
+        :put (($totalMiB / 10) . "." . ($totalMiB % 10) . "    " . \\\r\n
+              ($freeMiB / 10)  . "." . ($freeMiB % 10) . "    " . \\\r\n
+              ($usedMiB / 10)  . "." . ($usedMiB % 10) . "    " . $cpu)\r\n
+
+        :delay 1\r\n
+    }\r\n
+}\r\n""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
 
 [SONiC]
     input_ready = ":~"
@@ -62,11 +84,11 @@ done >> monitoring.txt &\n""",
     gap_between_interfaces = 4
     image_path = "/home/julien/Programmation/vm/SONiC/sonic-vs-2025-05.img"
     resources_monitor_commands = [
-        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\n" &&
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
 while true
 do
-   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\n", $2, $7, $3)}' && sleep 1
-done\n""",
+   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
+done""",
         { expect = "", wait = 60_000_000 },
         { expect = "", control = 'c' }
     ]
@@ -80,3 +102,12 @@ done\n""",
     interface_prefix = "eth"
     interfaces_start_at = 0
     image_path = "/home/julien/Programmation/vm/VyOS/vyos-2025.04.04-0018-rolling-generic-amd64.iso"
+    resources_monitor_commands = [
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+while true
+do
+   free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
+done""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
