@@ -16,7 +16,14 @@ pub struct Gns3Connector(pub Py<PyModule>, pub Py<PyAny>);
 
 impl Gns3Connector {
     pub fn new(py: Python) -> PyResult<Self> {
-        let gns3fy = py.import("gns3fy")?;
+        let gns3fy = match py.import("gns3fy") {
+            Ok(gns3fy) => Ok(gns3fy),
+            Err(err) => match err.to_string().starts_with("ModuleNotFoundError") {
+                true => Err(anyhow!("{}\nPlease source a venv generated from the \"pyproject.toml\" file", err)),
+                false => Err(anyhow!(err))
+            }
+        }?;
+        
         let gns3_connector = gns3fy.getattr("Gns3Connector")?;
         let connector = gns3_connector.call1((
             GNS3_SERVER_URL.get().unwrap(),

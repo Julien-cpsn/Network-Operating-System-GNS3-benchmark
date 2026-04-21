@@ -19,7 +19,7 @@ use crate::models::network_stack::NetworkStack;
 use crate::models::nodes::node::{NodeType};
 use crate::models::operating_system::OperatingSystem;
 use crate::models::os_command::OsCommand;
-use crate::models::routes::route::Route;
+use crate::models::routes::route_config::RouteConfig;
 use crate::models::routing_stack::RoutingStack;
 use crate::utils::env::harvest_env_variables;
 use crate::utils::files::experiments::parse_experiments_files;
@@ -39,6 +39,7 @@ use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
 use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY};
 use crate::utils::os_commands::router::{router_add_ip_address_commands, router_login_commands, router_start_network_stack_commands, router_start_routing_stack_commands, router_stop_network_stack_commands, router_stop_routing_stack_commands};
+use crate::utils::os_commands::routing::rip_config::router_configure_rip_commands;
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
 use crate::utils::route::generate_distant_network_from_test;
 use crate::utils::test::test_task;
@@ -202,10 +203,8 @@ pub async fn run_experiment(
         gns3_node.start()?;
 
         // Login
-
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
-        let network_stack = network_stacks.get(&os.network_stack).ok_or_else(|| anyhow!("No network stack found for {}", os.network_stack))?;
 
         let login_commands = router_login_commands(&os);
 
@@ -217,6 +216,23 @@ pub async fn run_experiment(
             Some(180_000),
             None
         )?;
+    }
+
+    if !run_command.run_command.no_sleep {
+        info!(target: TARGET, "Waiting 2 minutes");
+        // Sleep 3 mins so that the network can discuss
+        sleep(Duration::from_secs(120)).await;
+    }
+
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+        let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
+        let router = node.unwrap_router();
+        let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
+        let network_stack = network_stacks.get(&os.network_stack).ok_or_else(|| anyhow!("No network stack found for {}", os.network_stack))?;
+        let routing_stack = match &os.routing_stack {
+            None => None,
+            Some(routing_stack) => Some(routing_stacks.get(routing_stack).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?)
+        };
 
         // Skip all commands
         if run_command.run_command.os_setup {
@@ -234,10 +250,9 @@ pub async fn run_experiment(
             add_ip_address_commands.extend(router_add_ip_address_commands(&os, &network_stack, &index, &nic.nic_type, &nic.ip_address)?);
         }
 
-        for route in &router.routes {
-            if let Route::Static(static_route) = route {
+        if let RouteConfig::Static(static_routes) = &router.routes_config {
+            for static_route in static_routes {
                 let nic = router.nics.get(static_route.interface.to_string().as_str()).ok_or_else(|| anyhow!("NIC index {} found in router \"{}\"", &static_route.interface, &router_name))?;
-
                 static_routes_commands.extend(router_add_static_route_commands(&os, &network_stack, &static_route, &nic.nic_type)?);
             }
         }
@@ -258,20 +273,17 @@ pub async fn run_experiment(
 
         // Routing protocols (static, RIP, OSPF, BGP, MPLS)
 
-        let mut routing_commands = Vec::new();
-
-        for route in &router.routes {
-            let commands = match route {
-                Route::Rip(_rip_route) => Vec::new(),
-                Route::Ospf => Vec::new(),
-                Route::Bgp => Vec::new(),
-                Route::Mpls => Vec::new(),
+        let routing_commands = match routing_stack {
+            None => Vec::new(),
+            Some(routing_stack) => match &router.routes_config {
+                RouteConfig::Rip(rip_config) => router_configure_rip_commands(&router_name, &os, &routing_stack, &rip_config, &router.nics)?,
+                RouteConfig::Ospf => Vec::new(),
+                RouteConfig::Bgp => Vec::new(),
+                RouteConfig::Mpls => Vec::new(),
                 // Handled before
-                _ => Vec::new()
-            };
-
-            routing_commands.extend(commands);
-        }
+                RouteConfig::Static(_) => Vec::new()
+            }
+        };
 
         // Send commands
 
@@ -318,6 +330,12 @@ pub async fn run_experiment(
                 stop_monitoring.clone()
             ));
         }
+    }
+
+    if !run_command.run_command.no_sleep {
+        info!(target: TARGET, "Waiting 1 minutes");
+        // Sleep 3 mins so that the network can discuss
+        sleep(Duration::from_secs(60)).await;
     }
 
     /* RUN */

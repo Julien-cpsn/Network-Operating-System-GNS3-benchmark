@@ -82,12 +82,14 @@ def main(output_path: str, inputs: list[str]):
     ]
     legend_labels = [m.get_label() for m in mem_lines]
 
+    max_label = len(max(legend_labels, key=len))
+
     ax1.legend(
         legend_handles,
         legend_labels,
         handler_map={tuple: HandlerTuple(ndivide=None)},
         loc="center left",
-        bbox_to_anchor=(1.15, 0.85),
+        bbox_to_anchor=(1.025 + max_label * 0.005, 0.85),
         borderaxespad=0,
         frameon=False
     )

@@ -46,8 +46,8 @@ impl NicType {
     pub fn to_qemu_name(&self) -> String {
         match self {
             NicType::Rtl8139 => String::from("rtl8139"),
-            NicType::E1000 =>  String::from("e1000"),
-            NicType::VirtIO =>  String::from("virtio-net-pci")
+            NicType::E1000 => String::from("e1000"),
+            NicType::VirtIO => String::from("virtio-net-pci")
         }
     }
 }

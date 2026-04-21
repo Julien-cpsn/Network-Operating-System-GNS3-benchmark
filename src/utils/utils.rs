@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-use indexmap::IndexMap;
 use crate::models::nodes::node::{Node, NodeType};
+use indexmap::IndexMap;
+use std::collections::HashSet;
 
 pub fn filter_guests_mut(nodes: &mut IndexMap<String, Node>) -> IndexMap<&String, &mut Node> {
     nodes
@@ -79,10 +79,8 @@ pub fn extract_and_sort_common_parts(strings: Vec<&Vec<String>>) -> (Vec<String>
     let mut non_common_words: Vec<String> = all_words.difference(&common_words).map(|s| s.to_string()).collect();
     let mut common_words: Vec<String> = common_words.iter().map(|s| s.to_string()).collect();
 
-    non_common_words.sort_by(|a, b| a.len().cmp(&b.len()));
-    common_words.sort_by(|a, b| a.len().cmp(&b.len()));
-    non_common_words.reverse();
-    common_words.reverse();
+    non_common_words.sort_by(|a, b| a.cmp(&b));
+    common_words.sort_by(|a, b| a.cmp(&b));
 
     (common_words, non_common_words)
 }

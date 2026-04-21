@@ -34,8 +34,6 @@ pub fn router_start_network_stack_commands(os: &OperatingSystem, network_stack: 
         commands.push(command)
     }
 
-    commands.push(OsCommand::new_line(&os.input_ready));
-
     commands
 }
 
@@ -46,8 +44,6 @@ pub fn router_stop_network_stack_commands(os: &OperatingSystem, network_stack: &
         let command = stop.to_os_command(&os, None);
         commands.push(command)
     }
-
-    commands.push(OsCommand::new_line(&os.input_ready));
 
     commands
 }
@@ -70,8 +66,6 @@ pub fn router_add_ip_address_commands(os: &OperatingSystem, network_stack: &Netw
         commands.push(command)
     }
 
-    commands.push(OsCommand::new_line(&os.input_ready));
-
     Ok(commands)
 }
 
@@ -83,8 +77,6 @@ pub fn router_start_routing_stack_commands(os: &OperatingSystem, routing_stack: 
         commands.push(command)
     }
 
-    commands.push(OsCommand::new_line(&os.input_ready));
-
     commands
 }
 
@@ -95,8 +87,6 @@ pub fn router_stop_routing_stack_commands(os: &OperatingSystem, routing_stack: &
         let command = stop.to_os_command(&os, None);
         commands.push(command)
     }
-
-    commands.push(OsCommand::new_line(&os.input_ready));
 
     commands
 }

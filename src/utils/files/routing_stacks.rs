@@ -26,8 +26,14 @@ pub fn parse_routing_stack_list_file() -> anyhow::Result<IndexMap<String, Routin
     else {
         debug!(target: TARGET, "Found routing stack list:");
 
-        for key in routing_stacks.keys() {
-            debug!(target: TARGET, "- {}", key);
+        for (key, routing_stack) in &routing_stacks {
+            let mut supported_protocols = Vec::new();
+
+            if routing_stack.rip.is_some() {
+                supported_protocols.push("RIP");
+            }
+
+            debug!(target: TARGET, "- {} ({})", key, supported_protocols.join(", "));
         }
     }
 

@@ -40,13 +40,13 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
         fs::create_dir(&plot_output_directory_path)?;
     }
 
-    plot_flent(&plot_command, &plot_output_directory_path, &experiment_results, common_words)?;
-    plot_resources(&plot_output_directory_path, &experiment_results)?;
+    plot_flent(&plot_command, &plot_output_directory_path, &experiment_results, &common_words, non_common_words)?;
+    plot_resources(&plot_output_directory_path, &experiment_results, &common_words)?;
 
     Ok(())
 }
 
-fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>, common_words: Vec<String>) -> anyhow::Result<()> {
+fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>, common_words: &Vec<String>, non_common_words: Vec<String>) -> anyhow::Result<()> {
     let notes: Vec<&str> = match plot_command.plot_command.hide_note {
         false => common_words.iter().map(|s| s.as_str()).collect(),
         true => Vec::new(),
@@ -57,10 +57,17 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
 
     let flent_legends_to_remove: Vec<String> = common_words
         .iter()
-        .map(|s| [String::from("--filter-regexp"), format!("{}\\s?", s.as_str())])
+        .map(|s| [String::from("--filter-regexp"), format!("{},?", s.as_str())])
         .flatten()
         .collect();
     let flent_legends_to_remove: Vec<&str> = flent_legends_to_remove.iter().map(|s| s.as_str()).collect();
+
+    let flent_legends_to_modify: Vec<String> = non_common_words
+        .iter()
+        .map(|s| [String::from("--replace-legend"), format!("\"{}\"=\"{} ,\"", s.as_str(), s.as_str())])
+        .flatten()
+        .collect();
+    let flent_legends_to_modify: Vec<&str> = flent_legends_to_modify.iter().map(|s| s.as_str()).collect();
 
     for experiment in experiment_results {
         for result_path in &experiment.result_paths {
@@ -101,6 +108,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
                 ],
                 flent_input_files_args.clone(),
                 flent_legends_to_remove.clone(),
+                flent_legends_to_modify.clone(),
                 flent_additional_args.clone(),
                 vec![
                     "--figure-note",
@@ -121,7 +129,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
     Ok(())
 }
 
-fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>) -> anyhow::Result<()> {
+fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec<ExperimentAndResults>, common_words: &Vec<String>) -> anyhow::Result<()> {
     let comparison_mode = experiment_results.len() > 1;
 
     let output_path = plot_output_directory_path.join("resources.svg");
@@ -131,7 +139,21 @@ fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec
     ];
 
     for experiment_result in experiment_results {
-        for (router_name, node) in filter_routers(&experiment_result.experiment.network.nodes) {
+        let adjusted_experiment_name = common_words
+            .iter()
+            .fold(
+                experiment_result.experiment.experiment_name.clone(),
+                |i, c|
+                    i
+                        .replace(&format!(",{c}"), " ")
+                        .replace(&format!("{c},"), " ")
+                        .replace(c, "")
+                        .replace("  ", " ")
+            )
+            .replace("  ", " ")
+            .replace(',', "");
+
+        for router_name in filter_routers(&experiment_result.experiment.network.nodes).keys() {
             let router_log_file_path = RESULT_DIR_PATH.join(&experiment_result.experiment.experiment_name).join(format!("{router_name}.log"));
 
             if !router_log_file_path.exists() {
@@ -139,11 +161,10 @@ fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec
             }
 
             if comparison_mode {
-                let router = node.unwrap_router();
-                args.push(format!("{}:{}", router.os_name, router_log_file_path.display()));
+                args.push(format!("{} {}:{}", adjusted_experiment_name, router_name, router_log_file_path.display()));
             }
             else {
-                args.push(router_log_file_path.display().to_string());
+                args.push(format!("{}:{}", router_name, router_log_file_path.display().to_string()));
             }
         }
     }
@@ -165,7 +186,7 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
             let result_dir_path = RESULT_DIR_PATH.join(&experiment.experiment_name).join(&test.name);
 
             if !result_dir_path.exists() {
-                warn!(target: TARGET, "Result file for \"{} {}\" does not exist", &experiment.experiment_name, &test.name);
+                warn!(target: TARGET, "Result file for \"{}\" \"{}\" does not exist", &experiment.experiment_name, &test.name);
                 continue;
             }
 
@@ -196,6 +217,8 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
 
         experiment_results.push(experiment_and_results);
     }
+
+    experiment_results.sort_by(|a, b| a.experiment.experiment_name.cmp(&b.experiment.experiment_name));
 
     Ok(experiment_results)
 }

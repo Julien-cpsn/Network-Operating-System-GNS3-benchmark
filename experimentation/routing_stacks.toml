@@ -3,15 +3,52 @@
     stop = []
 
 ["FRR"]
+    # https://github.com/sonic-net/SONiC/issues/1956
     start = [
-        #"sudo vtysh",
-        #{ expect = "# ", send = "configure terminal", can_fail = true },
+        "sudo mkdir /etc/frr",
+        """sudo bash -c 'sudo cat > /etc/frr/daemons << EOF
+zebra=no
+bgpd=no
+ospfd=no
+ospf6d=no
+ripd=no
+ripngd=no
+isisd=no
+pimd=no
+ldpd=no
+nhrpd=no
+eigrpd=no
+babeld=no
+sharpd=no
+staticd=no
+pbrd=no
+bfdd=no
+fabricd=no
+EOF'""",
+        "sleep 15",
+        "sudo vtysh",
+        { expect = "# ", send = "configure terminal" },
     ]
+    RIP = {
+        enable_interface = [
+            { expect = "(config)# ", send = "interface {INTERFACE_PREFIX}{INTERFACE}" },
+            { expect = "(config-if)# ", send = "ip rip send version 2" },
+            { expect = "(config-if)# ", send = "ip rip receive version 2" },
+            { expect = "(config-if)# ", send = "exit" }
+        ],
+        add_network = [
+            { expect = "(config)# ", send = "router rip" },
+            { expect = "(config-router)# ", send = "version 2" },
+            { expect = "(config-router)# ", send = "network {DISTANT_NETWORK}" },
+            #{ expect = "(config-router)# ", send = "redistribute connected" },
+            { expect = "(config-router)# ", send = "exit" }
+        ]
+    }
     stop = [
-        #{ expect = "(config)# ", send = "exit", can_fail = true },
-        #{ expect = "# ", send = "write memory", can_fail = true },
-        #{ expect = "# ", send = "end", can_fail = true },
-        #{ expect = "# ", send = "exit", can_fail = true },
+        { expect = "(config)# ", send = "exit" },
+        { expect = "# ", send = "write memory" },
+        { expect = "# ", send = "end" },
+        { expect = "# ", send = "exit" },
     ]
 
 ["MikroTik routing stack"]

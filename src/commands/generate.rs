@@ -1,6 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::exit;
+use anyhow::anyhow;
 use indexmap::IndexMap;
 use tracing::{error, info, warn};
 use strum::VariantArray;
@@ -123,9 +124,9 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                     },
                                     GenericNodeType::Router(router) => {
                                         let (vcpu, ram) = resources.to_vcpu_and_ram();
-                                        let routes = match router.routes.get(routing_protocol) {
+                                        let routes = match router.routes_config.get(routing_protocol) {
                                             Some(routes) => routes.clone(),
-                                            None => Vec::new(),
+                                            None => return Err(anyhow!("Routing protocol \"{}\" has no route in router \"{}\"", routing_protocol, key)),
                                         };
 
                                         let mut nics = IndexMap::new();
@@ -143,7 +144,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                             os_name: os_name.to_owned(),
                                             number_nics: router.number_nics,
                                             nics,
-                                            routes,
+                                            routes_config: routes,
                                         });
 
                                         (vcpu, ram, node_type)
@@ -161,6 +162,16 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                 };
 
                                 nodes.insert(key.to_owned(), node);
+                            }
+
+                            for (index, physical_link) in topology.network.physical_links.iter().enumerate() {
+                                if !nodes.contains_key(&physical_link.node_a) {
+                                    return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_a, topology_name, index));
+                                }
+
+                                if !nodes.contains_key(&physical_link.node_b) {
+                                    return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_b, topology_name, index));
+                                }
                             }
 
                             let experiment = Experiment {
