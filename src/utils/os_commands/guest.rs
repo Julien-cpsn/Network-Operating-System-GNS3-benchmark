@@ -10,6 +10,11 @@ pub fn guest_config_commands(ip_address: Ipv4Addr) -> Vec<OsCommand> {
     vec![
         OsCommand::new_text("ogin:", "root", true, false),
         OsCommand::new_text("assword:", "debian", true, false),
+
+        OsCommand::new_text(GUEST_INPUT_READY, "rm /etc/resolv.conf", true, false),
+        OsCommand::new_text(GUEST_INPUT_READY, "sed 's/#deny-interfaces=/deny-interfaces=ens4/' /etc/avahi/avahi-daemon.conf", true, false),
+        OsCommand::new_text(GUEST_INPUT_READY, "systemctl reload avahi-daemon.service", true, false),
+
         OsCommand::new_text(GUEST_INPUT_READY, "ip link set ens4 up", true, false),
         OsCommand::new_text(GUEST_INPUT_READY, format!("ip address add {}/24 dev ens4", &ip_address), true, false),
     ]
