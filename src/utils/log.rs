@@ -4,13 +4,15 @@ use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::ARGS;
 use std::io::stdout;
 use indexmap::IndexMap;
-use tracing::{subscriber, Dispatch, Level};
+use tracing::{subscriber, Dispatch, Level, debug};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use crate::models::nodes::node::Node;
+
+const TARGET: &str = "log";
 
 pub fn setup_global_logger() -> anyhow::Result<()> {
     let verbosity = match (ARGS.verbosity.is_present(), ARGS.verbosity.tracing_level()) {
@@ -63,6 +65,7 @@ pub fn find_and_delete_log_files(experiment_name: &str, nodes: &IndexMap<String,
     let experiment_log_path = experiment_path.join(format!("{experiment_name}.log"));
 
     if experiment_log_path.exists() {
+        debug!(target: TARGET, "Deleting existing experiment log file: {}", experiment_log_path.display());
         fs::remove_file(&experiment_log_path)?;
     }
 
@@ -70,6 +73,7 @@ pub fn find_and_delete_log_files(experiment_name: &str, nodes: &IndexMap<String,
         let path = experiment_path.join(format!("{node_name}.log"));
 
         if path.exists() {
+            debug!(target: TARGET, "Deleting existing node log file: {}", path.display());
             fs::remove_file(&path)?;
         }
     }

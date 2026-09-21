@@ -22,7 +22,7 @@ impl HardwareResources {
         match self {
             HardwareResources::LowResources => (1, 1024),
             HardwareResources::MediumResources => (2, 2048),
-            HardwareResources::HighResources => (4, 8096)
+            HardwareResources::HighResources => (4, 8192)
         }
     }
 }

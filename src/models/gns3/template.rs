@@ -45,7 +45,7 @@ pub struct Gns3QemuTemplate {
     pub ram: u32,
     pub legacy_networking: bool,
     pub replicate_network_connection_state: bool,
-    pub mac_address: String,
+    pub mac_address: Option<String>,
 
     pub console_type: String,
     pub console_auto_start: bool,

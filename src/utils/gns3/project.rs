@@ -8,11 +8,19 @@ const TARGET: &str = "project";
 pub fn find_and_delete_projects(gns3: &Gns3Connector) -> anyhow::Result<()> {
     let projects = gns3.get_projects()?;
 
+    let mut project_deleted = false;
+
     for project in projects {
         if project.name.starts_with(GNS3_PROJECT_PREFIX.get().unwrap()) {
             debug!(target: TARGET, "Deleting old project: {}", project.name);
             gns3.delete_project(&project.project_id)?;
+
+            project_deleted = true;
         }
+    }
+
+    if !project_deleted {
+        debug!(target: TARGET, "No projects deleted");
     }
 
     Ok(())

@@ -15,11 +15,19 @@ pub fn template_name(name: &str) -> String {
 pub fn find_and_delete_templates(gns3: &Gns3Connector) -> anyhow::Result<()> {
     let templates = gns3.get_templates()?;
 
+    let mut template_deleted = false;
+
     for template in templates {
         if template.name.starts_with(GNS3_TEMPLATE_PREFIX.get().unwrap()) {
             warn!(target: TARGET, "Deleting old template: {}", template.name);
             gns3.delete_template(&template.name)?;
+
+            template_deleted = true;
         }
+    }
+
+    if template_deleted {
+        debug!(target: TARGET, "No templates deleted");
     }
 
     Ok(())
@@ -43,7 +51,7 @@ pub fn generate_and_create_guest_template(gns3: &Gns3Connector, guest_name: &str
             ram: node.ram,
             legacy_networking: false,
             replicate_network_connection_state: true,
-            mac_address: String::new(),
+            mac_address: None,
             console_type: String::from("telnet"),
             console_auto_start: false,
             create_config_disk: false,
@@ -103,7 +111,7 @@ pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &s
             ram: node.ram,
             legacy_networking: false,
             replicate_network_connection_state: true,
-            mac_address: String::new(),
+            mac_address: None,
             console_type: String::from("telnet"),
             console_auto_start: false,
             create_config_disk: false,
