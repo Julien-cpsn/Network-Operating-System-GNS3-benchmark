@@ -61,6 +61,12 @@ Then you should see all possible experiments created in `./experimentation/exper
 
 ### 4. Run the experiments
 
+> [!WARNING]
+> You need to source the Python environment first
+> ```shell
+> source .venv/bin/activate
+> ```
+
 Then you can run experiments:
 
 ```shell
