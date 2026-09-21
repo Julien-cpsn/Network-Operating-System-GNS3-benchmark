@@ -68,13 +68,13 @@ def main(output_path: str, inputs: list[str]):
         cpu_lines.append(cpu_line)
 
     ax1.set_xlabel("Time (seconds since experiment start)")
-    ax1.set_ylabel("Used Memory (MiB)")
-    ax2.set_ylabel("CPU load (%)")
+    ax1.set_ylabel("— Used Memory (MiB)")
+    ax2.set_ylabel("···  CPU load (%)")
 
     ax1.set_ylim(bottom=0)
     ax2.set_ylim(0, 100)
 
-    plt.title("Used Memory and CPU load Comparison")
+    plt.title("Used Memory and CPU load")
 
     # Combine legends
     legend_handles = [
