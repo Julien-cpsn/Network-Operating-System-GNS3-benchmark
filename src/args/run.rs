@@ -11,10 +11,14 @@ pub struct RunCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct RunCommandArgs {
-    /// No 3 minutes sleep after starting the nodes and before starting the experiment
+    /// No sleep after starting the nodes and before starting the experiment
     #[arg(long)]
     pub no_sleep: bool,
-    
+
+    /// Do not run test in the experiment
+    #[arg(long)]
+    pub no_test: bool,
+
     /// Only run the first experiment
     #[arg(long)]
     pub first_only: bool,

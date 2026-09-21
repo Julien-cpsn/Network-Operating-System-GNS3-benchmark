@@ -7,7 +7,22 @@ from matplotlib.legend_handler import HandlerTuple
 from datetime import datetime
 from pathlib import Path
 
-def extract_used_resources(path):
+def extract_experiment_time(path: str) -> tuple[datetime, datetime]:
+    parent_folder = Path(path).parent
+    experiment_log_file_path = f'{parent_folder}/experiment.log'
+
+    with open(experiment_log_file_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+        start_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment start', content)
+        start_time = datetime.fromisoformat(start_match[0].replace("Z", "+00:00"))
+
+        end_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment end', content)
+        end_time = datetime.fromisoformat(end_match[0].replace("Z", "+00:00"))
+
+        return start_time, end_time
+
+def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
     timestamps = []
     used_mem = []
     cpu_usage = []
@@ -32,6 +47,17 @@ def extract_used_resources(path):
     if not timestamps:
         return None, None
 
+    filtered = [
+        (t, mem, cpu)
+        for t, mem, cpu in zip(timestamps, used_mem, cpu_usage)
+        if start_time < t < end_time
+    ]
+
+    if not filtered:
+        return None, None, None
+
+    timestamps, used_mem, cpu_usage = map(list, zip(*filtered))
+
     # Normalize time to start at 0
     t0 = min(timestamps)
     elapsed = [(t - t0).total_seconds() for t in timestamps]
@@ -55,7 +81,8 @@ def main(output_path: str, inputs: list[str]):
             label = data[0]
             path = data[1]
 
-        elapsed, used_memory, cpu_usage = extract_used_resources(path)
+        start_time, end_time = extract_experiment_time(path)
+        elapsed, used_memory, cpu_usage = extract_used_resources(path, start_time, end_time)
 
         if elapsed is None:
             print(f"Warning: no data found in {path}")

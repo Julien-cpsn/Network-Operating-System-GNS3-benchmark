@@ -62,7 +62,7 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     Python::initialize();
     info!(target: TARGET, "Python interpreter initialized!");
 
-    let experiments = parse_experiments_files(&run_command.experiment_selection)?;
+    let mut experiments = parse_experiments_files(&run_command.experiment_selection)?;
 
     if experiments.is_empty() {
         warn!(target: TARGET, "No experiment found");
@@ -78,16 +78,27 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
 
     find_or_upload_image(&gns3, &images_path, &GUEST_IMAGE_PATH.get().unwrap())?;
 
-    for experiment in experiments {
+    let nb_experiments = experiments.len();
+    for (index, experiment) in experiments.drain(..).enumerate() {
         let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
         if !experiment_path.exists() {
             fs::create_dir(&experiment_path)?;
         }
 
-        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, &experiment.experiment_name)?;
+        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, "experiment")?;
         let _log_guard = dispatcher.set_default();
-        
-        if let Err(error) = run_experiment(&run_command, &gns3, &os_list, &network_stack_list, &routing_stack_list, &images_path, experiment).await {
+
+        if let Err(error) = run_experiment(
+            index,
+            nb_experiments,
+            &run_command,
+            &gns3,
+            &os_list,
+            &network_stack_list,
+            &routing_stack_list,
+            &images_path,
+            experiment
+        ).await {
             error!(target: TARGET, "{}", error);
             exit(1);
         }
@@ -99,6 +110,8 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
 }
 
 pub async fn run_experiment(
+    index: usize,
+    nb_experiments: usize,
     run_command: &RunCommand,
     gns3: &Gns3Connector,
     oses: &IndexMap<String, OperatingSystem>,
@@ -109,7 +122,7 @@ pub async fn run_experiment(
 ) -> anyhow::Result<()> {
     const TARGET: &str = "experiment";
 
-    info!(target: TARGET, "----- Running experiment: {} -----", experiment.experiment_name);
+    info!(target: TARGET, "----- Running experiment {}/{}: {} -----", index + 1, nb_experiments, experiment.experiment_name);
 
     /* INITIALIZATION */
 
@@ -333,37 +346,43 @@ pub async fn run_experiment(
     }
 
     if !run_command.run_command.no_sleep {
-        info!(target: TARGET, "Waiting 1 minutes");
+        info!(target: TARGET, "Waiting 1 minute");
         // Sleep 3 mins so that the network can discuss
         sleep(Duration::from_secs(60)).await;
     }
 
     /* RUN */
 
-    let mut test_threads = JoinSet::new();
+    if !run_command.run_command.no_test {
+        info!(target: TARGET, "Experiment start");
 
-    for test in experiment.test_batch {
-        let (from_node_name, from_node) = experiment.network.nodes.get_key_value(&test.from).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", test.from, &test.name))?;
-        let to_node = experiment.network.nodes.get(&test.to).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", &test.to, &test.name))?;
+        let mut test_threads = JoinSet::new();
 
-        if matches!(from_node.node_type, NodeType::Router(..)) || matches!(to_node.node_type, NodeType::Router(..)) {
-            return Err(anyhow!("Cannot test from/to router nodes, only guests"))
+        for test in experiment.test_batch {
+            let (from_node_name, from_node) = experiment.network.nodes.get_key_value(&test.from).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", test.from, &test.name))?;
+            let to_node = experiment.network.nodes.get(&test.to).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", &test.to, &test.name))?;
+
+            if matches!(from_node.node_type, NodeType::Router(..)) || matches!(to_node.node_type, NodeType::Router(..)) {
+                return Err(anyhow!("Cannot test from/to router nodes, only guests"))
+            }
+
+            let gns3_node = from_node.gns3_node.as_ref().unwrap();
+            let to_node_ip = to_node.unwrap_guest().ip.address();
+
+            test_threads.spawn(test_task(
+                experiment.experiment_name.clone(),
+                test.clone(),
+                from_node_name.to_owned(),
+                gns3_node.console_host(),
+                gns3_node.console(),
+                to_node_ip
+            ));
         }
 
-        let gns3_node = from_node.gns3_node.as_ref().unwrap();
-        let to_node_ip = to_node.unwrap_guest().ip.address();
+        test_threads.join_all().await;
 
-        test_threads.spawn(test_task(
-            experiment.experiment_name.clone(),
-            test.clone(),
-            from_node_name.to_owned(),
-            gns3_node.console_host(),
-            gns3_node.console(),
-            to_node_ip
-        ));
+        info!(target: TARGET, "Experiment end");
     }
-
-    test_threads.join_all().await;
 
     stop_monitoring.store(true, Ordering::Relaxed);
 
