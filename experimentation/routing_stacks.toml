@@ -3,28 +3,10 @@
     stop = []
 
 ["FRR"]
-    # https://github.com/sonic-net/SONiC/issues/1956
     start = [
-        "sudo mkdir /etc/frr",
-        """sudo bash -c 'sudo cat > /etc/frr/daemons << EOF
-zebra=no
-bgpd=no
-ospfd=no
-ospf6d=no
-ripd=no
-ripngd=no
-isisd=no
-pimd=no
-ldpd=no
-nhrpd=no
-eigrpd=no
-babeld=no
-sharpd=no
-staticd=no
-pbrd=no
-bfdd=no
-fabricd=no
-EOF'""",
+        "docker exec -it bgp bash",
+        { expect = ":/", send = "/usr/lib/frr/ripd -d" },
+        { expect = ":/", send = "exit" },
         "sleep 15",
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },
