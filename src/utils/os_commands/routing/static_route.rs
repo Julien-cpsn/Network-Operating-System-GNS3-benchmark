@@ -18,8 +18,9 @@ pub fn router_add_static_route_commands(os: &OperatingSystem, network_stack: &Ne
     ]);
 
     for add_static_route in &network_stack.add_static_route {
-        let command = add_static_route.to_os_command(&os, Some(&to_replace));
+        if let Some(command) = add_static_route.to_os_command(&os, Some(&to_replace)) {
         commands.push(command);
+        }
     }
 
     commands.push(OsCommand::new_line(&os.input_ready));

@@ -30,8 +30,9 @@ pub fn router_start_network_stack_commands(os: &OperatingSystem, network_stack: 
     let mut commands = Vec::new();
 
     for start in &network_stack.start {
-        let command = start.to_os_command(&os, None);
-        commands.push(command)
+        if let Some(command) = start.to_os_command(&os, None) {
+        commands.push(command);
+        }
     }
 
     commands
@@ -41,8 +42,9 @@ pub fn router_stop_network_stack_commands(os: &OperatingSystem, network_stack: &
     let mut commands = Vec::new();
 
     for stop in &network_stack.stop {
-        let command = stop.to_os_command(&os, None);
-        commands.push(command)
+        if let Some(command) = stop.to_os_command(&os, None) {
+        commands.push(command);
+        }
     }
 
     commands
@@ -62,8 +64,9 @@ pub fn router_add_ip_address_commands(os: &OperatingSystem, network_stack: &Netw
     ]);
 
     for add_ip_address in &network_stack.add_ip_address {
-        let command = add_ip_address.to_os_command(&os, Some(&to_replace));
-        commands.push(command)
+        if let Some(command) = add_ip_address.to_os_command(&os, Some(&to_replace)) {
+        commands.push(command);
+        }
     }
 
     Ok(commands)
@@ -73,8 +76,9 @@ pub fn router_start_routing_stack_commands(os: &OperatingSystem, routing_stack: 
     let mut commands = Vec::new();
 
     for start in &routing_stack.start {
-        let command = start.to_os_command(&os, None);
-        commands.push(command)
+        if let Some(command) = start.to_os_command(&os, None) {
+        commands.push(command);
+        }
     }
 
     commands
@@ -84,8 +88,9 @@ pub fn router_stop_routing_stack_commands(os: &OperatingSystem, routing_stack: &
     let mut commands = Vec::new();
 
     for stop in &routing_stack.stop {
-        let command = stop.to_os_command(&os, None);
-        commands.push(command)
+        if let Some(command) = stop.to_os_command(&os, None) {
+        commands.push(command);
+        }
     }
 
     commands

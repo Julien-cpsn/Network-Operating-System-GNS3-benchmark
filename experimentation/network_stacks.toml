@@ -15,7 +15,7 @@
     ]
     add_ip_address = [
         "ip link set dev {INTERFACE_PREFIX}{INTERFACE} up",
-        "ip address add {IP_ADDRESS} dev {INTERFACE_PREFIX}{INTERFACE}"
+        "ip address add {IP_ADDRESS}/{NETWORK_LENGTH} dev {INTERFACE_PREFIX}{INTERFACE}"
     ]
     add_static_route = [
         "ip route add {DISTANT_NETWORK} via {GATEWAY}"

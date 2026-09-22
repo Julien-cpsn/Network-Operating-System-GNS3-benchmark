@@ -231,12 +231,6 @@ pub async fn run_experiment(
         )?;
     }
 
-    if !run_command.run_command.no_sleep {
-        info!(target: TARGET, "Waiting 2 minutes");
-        // Sleep 3 mins so that the network can discuss
-        sleep(Duration::from_secs(120)).await;
-    }
-
     for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         let router = node.unwrap_router();
@@ -333,13 +327,18 @@ pub async fn run_experiment(
         if let Some(monitor) = &os.resources_monitor_commands {
             let gns3_node = node.gns3_node.as_ref().unwrap();
 
+            let monitor_commands = monitor
+                .iter()
+                .filter_map(|c| c.to_os_command(&os, None))
+                .collect();
+
             monitor_threads.spawn(monitor_task(
                 experiment.experiment_name.clone(),
                 router_name.clone(),
                 gns3_node.console_host(),
                 gns3_node.console(),
                 os.input_ready.clone(),
-                monitor.iter().map(|c| c.to_os_command(&os, None)).collect(),
+                monitor_commands,
                 stop_monitoring.clone()
             ));
         }
@@ -347,7 +346,7 @@ pub async fn run_experiment(
 
     if !run_command.run_command.no_sleep {
         info!(target: TARGET, "Waiting 1 minute");
-        // Sleep 3 mins so that the network can discuss
+        // Sleep 1 min so that the network can discuss
         sleep(Duration::from_secs(60)).await;
     }
 
@@ -384,8 +383,11 @@ pub async fn run_experiment(
         info!(target: TARGET, "Experiment end");
     }
 
-    stop_monitoring.store(true, Ordering::Relaxed);
+    info!(target: TARGET, "Waiting 10 seconds");
+    // Sleep 10 seconds so we can have monitoring after the end of the experiment
+    sleep(Duration::from_secs(10)).await;
 
+    stop_monitoring.store(true, Ordering::Relaxed);
     monitor_threads.join_all().await;
 
     /* STOP */

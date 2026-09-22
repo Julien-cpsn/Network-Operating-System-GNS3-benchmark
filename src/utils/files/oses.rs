@@ -20,7 +20,7 @@ pub fn parse_os_list_file(network_stack_list: Vec<&String>, routing_stack_list: 
     }
 
     let os_list_content = fs::read_to_string(&*OS_LIST_PATH)?;
-    let os_list: IndexMap<String, OperatingSystem> = toml::from_str(&os_list_content)?;
+    let mut os_list: IndexMap<String, OperatingSystem> = toml::from_str(&os_list_content)?;
 
     if os_list.is_empty() {
         debug!(target: TARGET, "Operating system list is empty");
@@ -43,6 +43,10 @@ pub fn parse_os_list_file(network_stack_list: Vec<&String>, routing_stack_list: 
                 }
             }
         }
+    }
+
+    for (name, os) in os_list.iter_mut() {
+        os.name = Some(name.to_owned());
     }
 
     Ok(os_list)

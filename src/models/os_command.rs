@@ -74,7 +74,9 @@ pub struct DeserializedOsCommand {
     #[serde(flatten)]
     pub send: DeserializedSendType,
     #[serde(default)]
-    pub can_fail: bool
+    pub can_fail: bool,
+    #[serde(default)]
+    pub assert_true: Option<(String, String)>
 }
 
 #[derive(Debug,Clone, Serialize, Deserialize)]
@@ -92,7 +94,7 @@ pub enum DeserializedSendType {
 }
 
 impl DeserializedOsCommandType {
-    pub fn to_os_command(&self, os: &OperatingSystem, to_replace: Option<&HashMap<&str, String>>) -> OsCommand {
+    pub fn to_os_command(&self, os: &OperatingSystem, to_replace: Option<&HashMap<&str, String>>) -> Option<OsCommand> {
         match self {
             DeserializedOsCommandType::Simple(send) => {
                 let send = match to_replace {
@@ -100,9 +102,18 @@ impl DeserializedOsCommandType {
                     Some(to_replace) => format_command(send, to_replace)
                 };
 
-                OsCommand::new_text(&os.input_ready, send, true, false)
+                Some(OsCommand::new_text(&os.input_ready, send, true, false))
             },
             DeserializedOsCommandType::Other(command) => {
+                if let Some((key, value)) = &command.assert_true {
+                    match key.as_str() {
+                        "OS" if os.name.as_ref().unwrap() != value => return None,
+                        "NETWORK_STACK" if &os.network_stack != value => return None,
+                        "ROUTING_STACK" if os.routing_stack.is_some() && &os.network_stack != value => return None,
+                        _ => {}
+                    }
+                }
+
                 let send = match &command.send {
                     DeserializedSendType::Text { send } => {
                         let send = match to_replace {
@@ -121,11 +132,11 @@ impl DeserializedOsCommandType {
                     None => os.input_ready.to_owned()
                 };
 
-                OsCommand {
+                Some(OsCommand {
                     expect,
                     send,
                     can_fail: command.can_fail,
-                }
+                })
             }
         }
     }

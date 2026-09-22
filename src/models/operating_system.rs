@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatingSystem {
+    pub name: Option<String>,
     pub input_ready: String,
     pub trigger_sequence: Option<String>,
     pub login: Option<String>,

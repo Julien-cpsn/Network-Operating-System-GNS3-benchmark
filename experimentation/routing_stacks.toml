@@ -4,10 +4,12 @@
 
 ["FRR"]
     start = [
-        "docker exec -it bgp bash",
-        { expect = ":/", send = "/usr/lib/frr/ripd -d" },
-        { expect = ":/", send = "exit" },
-        "sleep 15",
+        # SONiC only to actiave RIP
+        { send = "docker exec -it bgp bash", assert_true = ["OS", "SONiC"] },
+        { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = ["OS", "SONiC"] },
+        { expect = ":/", send = "exit", assert_true = ["OS", "SONiC"] },
+        { send = "sleep 15", assert_true = ["OS", "SONiC"] },
+
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },
     ]
@@ -31,6 +33,7 @@
         { expect = "# ", send = "write memory" },
         { expect = "# ", send = "end" },
         { expect = "# ", send = "exit" },
+        { expect = "", send = "" },
     ]
 
 ["MikroTik routing stack"]

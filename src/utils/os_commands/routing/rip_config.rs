@@ -40,8 +40,9 @@ fn router_enable_rip_interface_commands(os: &OperatingSystem, rip_commands: &Rip
     ]);
 
     for enable_interface in &rip_commands.enable_interface {
-        let command = enable_interface.to_os_command(&os, Some(&to_replace));
+        if let Some(command) = enable_interface.to_os_command(&os, Some(&to_replace)) {
         commands.push(command);
+        }
     }
     
     Ok(commands)
@@ -55,8 +56,9 @@ fn router_add_rip_network_commands(os: &OperatingSystem, rip_commands: &RipComma
     ]);
 
     for add_network in &rip_commands.add_network {
-        let command = add_network.to_os_command(&os, Some(&to_replace));
+        if let Some(command) = add_network.to_os_command(&os, Some(&to_replace)) {
         commands.push(command);
+        }
     }
     
     commands

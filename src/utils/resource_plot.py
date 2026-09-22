@@ -4,7 +4,7 @@ import re
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.legend_handler import HandlerTuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 def extract_experiment_time(path: str) -> tuple[datetime, datetime]:
@@ -47,10 +47,13 @@ def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
     if not timestamps:
         return None, None
 
+    measurement_start = start_time - timedelta(seconds=5)
+    measurement_end = end_time + timedelta(seconds=5)
+
     filtered = [
         (t, mem, cpu)
         for t, mem, cpu in zip(timestamps, used_mem, cpu_usage)
-        if start_time < t < end_time
+        if measurement_start <= t <= measurement_end
     ]
 
     if not filtered:
@@ -59,8 +62,7 @@ def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
     timestamps, used_mem, cpu_usage = map(list, zip(*filtered))
 
     # Normalize time to start at 0
-    t0 = min(timestamps)
-    elapsed = [(t - t0).total_seconds() for t in timestamps]
+    elapsed = [(t - start_time).total_seconds() for t in timestamps]
 
     return elapsed, used_mem, cpu_usage
 
@@ -70,6 +72,9 @@ def main(output_path: str, inputs: list[str]):
 
     mem_lines = []
     cpu_lines = []
+
+    experiment_start = None
+    experiment_end = None
 
     for input in inputs:
         data = input.split(":")
@@ -84,6 +89,10 @@ def main(output_path: str, inputs: list[str]):
         start_time, end_time = extract_experiment_time(path)
         elapsed, used_memory, cpu_usage = extract_used_resources(path, start_time, end_time)
 
+        if experiment_start is None:
+            experiment_start = start_time
+            experiment_end = end_time
+
         if elapsed is None:
             print(f"Warning: no data found in {path}")
             continue
@@ -93,6 +102,16 @@ def main(output_path: str, inputs: list[str]):
 
         mem_lines.append(mem_line)
         cpu_lines.append(cpu_line)
+
+    # Convert experiment end time to seconds relative to experiment start
+    experiment_end_elapsed = (experiment_end - experiment_start ).total_seconds()
+
+    # Experiment boundaries
+    ax1.axvline(x=0, color="grey", linestyle="--", linewidth=1)
+    ax1.axvline(x=experiment_end_elapsed, color="grey", linestyle="--", linewidth=1)
+
+    ax1.text(0, 0.6, "t0", transform=ax1.get_xaxis_transform(), rotation=90, va="top", ha="right", color="grey")
+    ax1.text(experiment_end_elapsed + 1, 0.6, "t_end", transform=ax1.get_xaxis_transform(), rotation=90, va="top", ha="left", color="grey")
 
     ax1.set_xlabel("Time (seconds since experiment start)")
     ax1.set_ylabel("— Used Memory (MiB)")
