@@ -15,10 +15,10 @@ def extract_experiment_time(path: str) -> tuple[datetime, datetime]:
         content = f.read()
 
         start_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment start', content)
-        start_time = datetime.fromisoformat(start_match[0].replace("Z", "+00:00"))
+        start_time = datetime.fromisoformat(start_match[len(start_match) - 1].replace("Z", "+00:00"))
 
         end_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment end', content)
-        end_time = datetime.fromisoformat(end_match[0].replace("Z", "+00:00"))
+        end_time = datetime.fromisoformat(end_match[len(end_match) - 1].replace("Z", "+00:00"))
 
         return start_time, end_time
 

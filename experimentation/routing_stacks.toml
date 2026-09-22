@@ -7,6 +7,7 @@
         # SONiC only to actiave RIP
         { send = "docker exec -it bgp bash", assert_true = ["OS", "SONiC"] },
         { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = ["OS", "SONiC"] },
+        { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = ["OS", "SONiC"] },
         { expect = ":/", send = "exit", assert_true = ["OS", "SONiC"] },
         { send = "sleep 15", assert_true = ["OS", "SONiC"] },
 
@@ -27,6 +28,18 @@
             #{ expect = "(config-router)# ", send = "redistribute connected" },
             { expect = "(config-router)# ", send = "exit" }
         ]
+    }
+    OSPF = {
+        set_router_id = [
+            { expect = "(config)# ", send = "router ospf" },
+            { expect = "(config-router)# ", send = "router-id {ROUTER_ID}" },
+            { expect = "(config-router)# ", send = "exit" }
+        ],
+        add_network = [
+            { expect = "(config)# ", send = "router ospf" },
+            { expect = "(config-router)# ", send = "network {DISTANT_NETWORK} area {AREA}" },
+            { expect = "(config-router)# ", send = "exit" }
+        ],
     }
     stop = [
         { expect = "(config)# ", send = "exit" },

@@ -33,6 +33,10 @@ pub fn parse_routing_stack_list_file() -> anyhow::Result<IndexMap<String, Routin
                 supported_protocols.push("RIP");
             }
 
+            if routing_stack.ospf.is_some() {
+                supported_protocols.push("OSPF");
+            }
+
             debug!(target: TARGET, "- {} ({})", key, supported_protocols.join(", "));
         }
     }

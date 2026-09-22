@@ -1,5 +1,5 @@
 [Simple]
-    supported_routing_protocols = ["static", "RIP"]
+    supported_routing_protocols = ["static", "RIP", "OSPF"]
 
     [Simple.network]
     physical_links = [
@@ -35,11 +35,17 @@
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.1.0/24", "10.0.2.0/24"]
+        },
+
+
+        OSPF = {
+            router_id = "1.1.1.1",
+            networks_to_add = [["10.0.1.0/24", 0], ["10.0.2.0/24", 0]]
         }
     }
 
 [Dumbbell]
-    supported_routing_protocols = ["static", "RIP"]
+    supported_routing_protocols = ["static", "RIP", "OSPF"]
 
     [Dumbbell.network]
     physical_links = [
@@ -75,6 +81,11 @@
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.1.0/24", "10.0.2.0/24"]
+        },
+
+        OSPF = {
+            router_id = "1.1.1.1",
+            networks_to_add = [["10.0.1.0/24", 0], ["10.0.2.0/24", 0]]
         }
     }
 
@@ -91,5 +102,10 @@
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.2.0/24", "10.0.3.0/24"]
+        },
+
+        OSPF = {
+            router_id = "2.2.2.2",
+            networks_to_add = [["10.0.2.0/24", 0], ["10.0.3.0/24", 0]]
         }
     }

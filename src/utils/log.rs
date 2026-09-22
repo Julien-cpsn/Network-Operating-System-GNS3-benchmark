@@ -14,6 +14,8 @@ use crate::models::nodes::node::Node;
 
 const TARGET: &str = "log";
 
+pub const EXPERIMENT_LOG_FILE_NAME: &str = "experiment";
+
 pub fn setup_global_logger() -> anyhow::Result<()> {
     let verbosity = match (ARGS.verbosity.is_present(), ARGS.verbosity.tracing_level()) {
         (true, Some(level)) => level,
@@ -60,14 +62,20 @@ pub fn setup_experiment_logger(experiment_name: &str, name: &str) -> anyhow::Res
     Ok((Dispatch::new(subscriber), file_guard))
 }
 
-pub fn find_and_delete_log_files(experiment_name: &str, nodes: &IndexMap<String, Node>) -> anyhow::Result<()> {
+pub fn find_and_delete_experiment_log_file(experiment_name: &str) -> anyhow::Result<()> {
     let experiment_path = RESULT_DIR_PATH.join(&experiment_name);
-    let experiment_log_path = experiment_path.join(format!("{experiment_name}.log"));
+    let experiment_log_path = experiment_path.join(format!("{EXPERIMENT_LOG_FILE_NAME}.log"));
 
     if experiment_log_path.exists() {
         debug!(target: TARGET, "Deleting existing experiment log file: {}", experiment_log_path.display());
         fs::remove_file(&experiment_log_path)?;
     }
+
+    Ok(())
+}
+
+pub fn find_and_delete_log_files(experiment_name: &str, nodes: &IndexMap<String, Node>) -> anyhow::Result<()> {
+    let experiment_path = RESULT_DIR_PATH.join(&experiment_name);
 
     for node_name in nodes.keys() {
         let path = experiment_path.join(format!("{node_name}.log"));

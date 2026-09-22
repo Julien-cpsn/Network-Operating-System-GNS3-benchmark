@@ -34,11 +34,12 @@ use crate::utils::gns3::node::create_node;
 use crate::utils::gns3::project::{create_project, find_and_delete_projects};
 use crate::utils::gns3::template::{find_and_delete_templates, generate_and_create_guest_template, generate_and_create_router_template};
 use crate::utils::link::create_link;
-use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger};
+use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger, EXPERIMENT_LOG_FILE_NAME, find_and_delete_experiment_log_file};
 use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
 use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY};
 use crate::utils::os_commands::router::{router_add_ip_address_commands, router_login_commands, router_start_network_stack_commands, router_start_routing_stack_commands, router_stop_network_stack_commands, router_stop_routing_stack_commands};
+use crate::utils::os_commands::routing::ospf_config::router_configure_ospf_commands;
 use crate::utils::os_commands::routing::rip_config::router_configure_rip_commands;
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
 use crate::utils::route::generate_distant_network_from_test;
@@ -85,7 +86,9 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
             fs::create_dir(&experiment_path)?;
         }
 
-        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, "experiment")?;
+        find_and_delete_experiment_log_file(&experiment.experiment_name)?;
+
+        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, EXPERIMENT_LOG_FILE_NAME)?;
         let _log_guard = dispatcher.set_default();
 
         if let Err(error) = run_experiment(
@@ -284,7 +287,7 @@ pub async fn run_experiment(
             None => Vec::new(),
             Some(routing_stack) => match &router.routes_config {
                 RouteConfig::Rip(rip_config) => router_configure_rip_commands(&router_name, &os, &routing_stack, &rip_config, &router.nics)?,
-                RouteConfig::Ospf => Vec::new(),
+                RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&os, &routing_stack, &ospf_config),
                 RouteConfig::Bgp => Vec::new(),
                 RouteConfig::Mpls => Vec::new(),
                 // Handled before
