@@ -139,7 +139,7 @@ pub async fn run_experiment(
 
     for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         let router = node.unwrap_router();
-        debug!(target: TARGET, "Ensuring \"{}\" operating ({}) is uploaded", router_name, router.os_name);
+        debug!(target: TARGET, "Ensuring \"{}\" operating system image ({}) is uploaded", router_name, router.os_name);
 
         let operating_system = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system found for {}", router.os_name))?;
         find_or_upload_image(&gns3, images_path, &operating_system.image_path)?;
