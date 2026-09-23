@@ -29,8 +29,6 @@ pub fn router_configure_rip_commands(command_context: &CommandContext, rip_confi
     let stop_rip_commands = router_stop_rip_commands(&command_context, &rip_commands)?;
     commands.extend(stop_rip_commands);
     
-    commands.push(OsCommand::new_line(&command_context.os.input_ready));
-    
     Ok(commands)
 }
 

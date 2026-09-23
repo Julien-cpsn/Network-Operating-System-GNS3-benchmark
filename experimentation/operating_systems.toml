@@ -10,13 +10,40 @@
         ["VirtIO", "vtnet"]
     ]
     interfaces_start_at = 0
-    image_path = "/home/julien/Programmation/vm/BSDRP/BSDRP-1.993-full-amd64-serial.img"
+    image_path = "/home/julien/Programmation/vm/BSDRP/BSDRP-2.2-full-amd64.img"
     resources_monitor_commands = [
+        "t=$(sysctl -n hw.physmem);p=$(sysctl -n hw.pagesize);f=$(sysctl -n vm.stats.vm.v_free_count);c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)",
         """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
 while true
 do
-   vmstat -H | awk 'FNR == 3 {printf("%s\\t%s\\t%s\\t", int($5/1000000), int(($5-$4)/1000000), int($4/1000000))}' && top -d 1 0 | awk '/CPU:  /{printf("%s\\n", substr($2, 1, length($2)-1))}' && sleep 1
+   awk -v t=$t -v p=$p -v f=$f -v c="$c" -v d="$d" 'BEGIN{split(c,x);split(d,y);for(i=1;i<=5;i++)z+=y[i]-x[i];printf("%d\\t%d\\t%d\\t%.4f\\n",t/1048576,f*p/1048576,(t-f*p)/1048576,100-(y[5]-x[5])*100/z)}'
+   c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)
 done""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
+
+[BSDRP-FRR]
+    input_ready = ":~"
+    login = "root"
+    #password = null
+    network_stack = "FreeBSD network stack"
+    routing_stack = "FRR"
+    interface_prefix = [
+        ["E1000", "em"],
+        ["RTL8139", "re"],
+        ["VirtIO", "vtnet"]
+    ]
+    interfaces_start_at = 0
+    image_path = "/home/julien/Programmation/vm/BSDRP/BSDRP-2.2-full-amd64.img"
+    resources_monitor_commands = [
+        "t=$(sysctl -n hw.physmem);p=$(sysctl -n hw.pagesize);f=$(sysctl -n vm.stats.vm.v_free_count);c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)",
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+    while true
+    do
+    awk -v t=$t -v p=$p -v f=$f -v c="$c" -v d="$d" 'BEGIN{split(c,x);split(d,y);for(i=1;i<=5;i++)z+=y[i]-x[i];printf("%d\\t%d\\t%d\\t%.4f\\n",t/1048576,f*p/1048576,(t-f*p)/1048576,100-(y[5]-x[5])*100/z)}'
+    c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)
+    done""",
         { expect = "", wait = 60_000_000 },
         { expect = "", control = 'c' }
     ]

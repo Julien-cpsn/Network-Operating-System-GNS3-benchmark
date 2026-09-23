@@ -81,12 +81,19 @@ EOF"""
 
 ["FRR"]
     start = [
-        # SONiC only to actiave RIP
+        # SONiC only
         { send = "docker exec -it bgp bash", assert_true = [["OS", "SONiC"]] },
         { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "RIP"]] },
         { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "OSPF"]] },
         { expect = ":/", send = "exit", assert_true = [["OS", "SONiC"]] },
         { send = "sleep 15", assert_true = [["OS", "SONiC"]] },
+
+        # BSDRP FRR
+        { send = "sysrc bird_enable=NO", assert_true = [["OS", "BSDRP-FRR"]] },
+        { send = "sysrc frr_enable=YES", assert_true = [["OS", "BSDRP-FRR"]] },
+        { send = "sysrc frr_daemons=\"zebra ripd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "RIP"]] },
+        { send = "sysrc frr_daemons=\"zebra ospfd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "OSPF"]] },
+        { send = "/usr/local/etc/rc.d/frr start", assert_true = [["OS", "BSDRP-FRR"]] },
 
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },
@@ -112,15 +119,14 @@ EOF"""
         start = [
             { expect = "(config)# ", send = "router ospf" },
             { expect = "(config-router)# ", send = "router-id {ROUTER_ID}" },
-            { expect = "(config-router)# ", send = "exit" }
         ],
         add_area = [],
         add_network = [
-            { expect = "(config)# ", send = "router ospf" },
             { expect = "(config-router)# ", send = "network {DISTANT_NETWORK} area {AREA}" },
-            { expect = "(config-router)# ", send = "exit" }
         ],
-        stop = []
+        stop = [
+            { expect = "(config-router)# ", send = "exit" }
+        ]
     }
     stop = [
         { expect = "(config)# ", send = "exit" },

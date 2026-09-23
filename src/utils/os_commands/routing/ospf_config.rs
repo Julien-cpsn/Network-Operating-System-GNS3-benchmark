@@ -31,9 +31,7 @@ pub fn router_configure_ospf_commands(command_context: &CommandContext, ospf_con
 
     let stop_ospf_commands = router_stop_ospf_commands(&command_context, &ospf_commands)?;
     commands.extend(stop_ospf_commands);
-
-    commands.push(OsCommand::new_line(&command_context.os.input_ready));
-
+    
     Ok(commands)
 }
 

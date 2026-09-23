@@ -18,8 +18,6 @@ pub fn router_add_static_route_commands(command_context: &CommandContext, static
         commands.push(command);
         }
     }
-
-    commands.push(OsCommand::new_line(&command_context.os.input_ready));
-
+    
     Ok(commands)
 }

@@ -50,8 +50,6 @@ pub fn router_stop_network_stack_commands(command_context: &CommandContext, netw
         }
     }
 
-    commands.push(OsCommand::new_line(&command_context.os.input_ready));
-
     Ok(commands)
 }
 
@@ -100,8 +98,6 @@ pub fn router_stop_routing_stack_commands(command_context: &CommandContext, rout
         commands.push(command);
         }
     }
-
-    commands.push(OsCommand::new_line(&command_context.os.input_ready));
 
     Ok(commands)
 }
