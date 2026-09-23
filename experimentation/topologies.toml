@@ -40,7 +40,13 @@
 
         OSPF = {
             router_id = "1.1.1.1",
-            networks_to_add = [["10.0.1.0/24", 0], ["10.0.2.0/24", 0]]
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.0.1.0/24", area = 0 },
+                { network = "10.0.2.0/24", area = 0 }
+            ]
         }
     }
 
@@ -85,7 +91,13 @@
 
         OSPF = {
             router_id = "1.1.1.1",
-            networks_to_add = [["10.0.1.0/24", 0], ["10.0.2.0/24", 0]]
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.0.1.0/24", area = 0 },
+                { network = "10.0.2.0/24", area = 0 }
+            ]
         }
     }
 
@@ -106,6 +118,12 @@
 
         OSPF = {
             router_id = "2.2.2.2",
-            networks_to_add = [["10.0.2.0/24", 0], ["10.0.3.0/24", 0]]
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.0.2.0/24", area = 0 },
+                { network = "10.0.3.0/24", area = 0 }
+            ]
         }
     }

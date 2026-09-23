@@ -17,6 +17,8 @@ pub fn parse_network_stack_list_file() -> anyhow::Result<IndexMap<String, Networ
         exit(1);
     }
 
+    debug!(target: TARGET, "Parsing network stack list");
+
     let network_stack_list_content = fs::read_to_string(&*NETWORK_STACK_LIST_PATH)?;
     let network_stacks: IndexMap<String, NetworkStack> = toml::from_str(&network_stack_list_content)?;
 

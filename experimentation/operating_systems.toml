@@ -1,4 +1,4 @@
-[BSDRP_BIRD2]
+[BSDRP-BIRD2]
     input_ready = ":~"
     login = "root"
     #password = null

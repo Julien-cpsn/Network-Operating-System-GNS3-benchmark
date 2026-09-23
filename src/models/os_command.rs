@@ -1,8 +1,12 @@
+use crate::models::network_stack::NetworkStack;
+use crate::models::nic::NicType;
+use crate::models::nodes::router::Router;
+use crate::models::operating_system::OperatingSystem;
+use crate::models::routing_stack::RoutingStack;
+use crate::utils::os_commands::utils::format_command;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
-use serde::{Deserialize, Serialize};
-use crate::models::operating_system::OperatingSystem;
-use crate::utils::os_commands::utils::format_command;
 
 #[derive(Clone)]
 pub struct OsCommand {
@@ -76,7 +80,7 @@ pub struct DeserializedOsCommand {
     #[serde(default)]
     pub can_fail: bool,
     #[serde(default)]
-    pub assert_true: Option<(String, String)>
+    pub assert_true: Vec<(String, String)>
 }
 
 #[derive(Debug,Clone, Serialize, Deserialize)]
@@ -93,8 +97,16 @@ pub enum DeserializedSendType {
     }
 }
 
+pub struct CommandContext<'a> {
+    pub router_name: &'a str,
+    pub router: &'a Router,
+    pub os: &'a OperatingSystem,
+    pub network_stack: Option<&'a NetworkStack>,
+    pub routing_stack: Option<&'a RoutingStack>,
+}
+
 impl DeserializedOsCommandType {
-    pub fn to_os_command(&self, os: &OperatingSystem, to_replace: Option<&HashMap<&str, String>>) -> Option<OsCommand> {
+    pub fn to_os_command(&self, context: &CommandContext, to_replace: Option<&HashMap<String, String>>) -> Option<OsCommand> {
         match self {
             DeserializedOsCommandType::Simple(send) => {
                 let send = match to_replace {
@@ -102,15 +114,16 @@ impl DeserializedOsCommandType {
                     Some(to_replace) => format_command(send, to_replace)
                 };
 
-                Some(OsCommand::new_text(&os.input_ready, send, true, false))
+                Some(OsCommand::new_text(&context.os.input_ready, send, true, false))
             },
             DeserializedOsCommandType::Other(command) => {
-                if let Some((key, value)) = &command.assert_true {
-                    match key.as_str() {
-                        "OS" if os.name.as_ref().unwrap() != value => return None,
-                        "NETWORK_STACK" if &os.network_stack != value => return None,
-                        "ROUTING_STACK" if os.routing_stack.is_some() && &os.network_stack != value => return None,
-                        _ => {}
+                for (key, value) in &command.assert_true {
+                    let context_map = context.to_key_value();
+                    
+                    if let Some(value_to_check) = context_map.get(key.as_str()) {
+                        if value_to_check != value {
+                            return None;
+                        }
                     }
                 }
 
@@ -129,7 +142,7 @@ impl DeserializedOsCommandType {
 
                 let expect = match &command.expect {
                     Some(expect) => expect.to_owned(),
-                    None => os.input_ready.to_owned()
+                    None => context.os.input_ready.to_owned()
                 };
 
                 Some(OsCommand {
@@ -139,5 +152,57 @@ impl DeserializedOsCommandType {
                 })
             }
         }
+    }
+}
+
+impl CommandContext<'_> {
+    pub fn to_replace_map(&self, nic_type: Option<&NicType>) -> anyhow::Result<HashMap<String, String>> {
+        let mut old_map = self.to_key_value();
+        let mut map = HashMap::new();
+
+        for (key, value) in old_map.drain() {
+            map.insert(format!("{{{key}}}"), value);
+        }
+
+        if let Some(nic_type) = nic_type {
+            map.insert(String::from("{INTERFACE_PREFIX}"), self.os.interface_prefix(&nic_type)?);
+        }
+
+        Ok(map)
+    }
+
+    fn to_key_value(&self) -> HashMap<&str, String> {
+        let mut map = HashMap::new();
+
+        // OperatingSystem
+        map.insert("OS", self.router.os_name.clone());
+        map.insert("INPUT_READY", self.os.input_ready.clone());
+
+        if let Some(trigger_sequence) = &self.os.trigger_sequence {
+            map.insert("TRIGGER_SEQUENCE", trigger_sequence.clone());
+        }
+
+        if let Some(login) = &self.os.login {
+            map.insert("LOGIN", login.clone());
+        }
+
+        if let Some(password) = &self.os.password {
+            map.insert("PASSWORD", password.clone());
+        }
+
+        map.insert("NETWORK_STACK", self.os.network_stack.clone());
+
+        if let Some(routing_stack) = &self.os.routing_stack {
+            map.insert("ROUTING_STACK", routing_stack.clone());
+        }
+
+        map.insert("INTERFACES_START_AT", self.os.interfaces_start_at.to_string());
+        map.insert("GAP_BETWEEN_INTERFACES", self.os.gap_between_interfaces.to_string());
+        map.insert("IMAGE_PATH", self.os.image_path.to_string_lossy().into_owned());
+
+        map.insert("ROUTER_ID", self.router.id.clone());
+        map.insert("ROUTING_PROTOCOL", self.router.routes_config.to_protocol_name().to_string());
+
+        map
     }
 }

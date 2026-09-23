@@ -18,7 +18,7 @@ use crate::models::gns3::connector::Gns3Connector;
 use crate::models::network_stack::NetworkStack;
 use crate::models::nodes::node::{NodeType};
 use crate::models::operating_system::OperatingSystem;
-use crate::models::os_command::OsCommand;
+use crate::models::os_command::{CommandContext, OsCommand};
 use crate::models::routes::route_config::RouteConfig;
 use crate::models::routing_stack::RoutingStack;
 use crate::utils::env::harvest_env_variables;
@@ -244,6 +244,14 @@ pub async fn run_experiment(
             Some(routing_stack) => Some(routing_stacks.get(routing_stack).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?)
         };
 
+        let command_context = CommandContext {
+            router_name,
+            router: &router,
+            os,
+            network_stack: Some(network_stack),
+            routing_stack,
+        };
+
         // Skip all commands
         if run_command.run_command.os_setup {
             continue;
@@ -251,19 +259,19 @@ pub async fn run_experiment(
 
         // Network stack setup
 
-        let start_network_stack_commands = router_start_network_stack_commands(&os, &network_stack);
-        let stop_network_stack_commands = router_stop_network_stack_commands(&os, &network_stack);
+        let start_network_stack_commands = router_start_network_stack_commands(&command_context, &network_stack)?;
+        let stop_network_stack_commands = router_stop_network_stack_commands(&command_context, &network_stack)?;
         let mut add_ip_address_commands = Vec::new();
         let mut static_routes_commands = Vec::new();
 
         for (index, nic) in &router.nics {
-            add_ip_address_commands.extend(router_add_ip_address_commands(&os, &network_stack, &index, &nic.nic_type, &nic.ip_address)?);
+            add_ip_address_commands.extend(router_add_ip_address_commands(&command_context, &index, &nic.nic_type, &nic.ip_address)?);
         }
 
         if let RouteConfig::Static(static_routes) = &router.routes_config {
             for static_route in static_routes {
                 let nic = router.nics.get(static_route.interface.to_string().as_str()).ok_or_else(|| anyhow!("NIC index {} found in router \"{}\"", &static_route.interface, &router_name))?;
-                static_routes_commands.extend(router_add_static_route_commands(&os, &network_stack, &static_route, &nic.nic_type)?);
+                static_routes_commands.extend(router_add_static_route_commands(&command_context, &static_route, &nic.nic_type)?);
             }
         }
 
@@ -274,8 +282,8 @@ pub async fn run_experiment(
                 let routing_stack = routing_stacks.get(routing_stack.as_str()).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?;
 
                 (
-                    router_start_routing_stack_commands(&os, &routing_stack),
-                    router_stop_routing_stack_commands(&os, &routing_stack),
+                    router_start_routing_stack_commands(&command_context, &routing_stack)?,
+                    router_stop_routing_stack_commands(&command_context, &routing_stack)?,
                 )
             }
             None => (Vec::new(), Vec::new()),
@@ -285,9 +293,9 @@ pub async fn run_experiment(
 
         let routing_commands = match routing_stack {
             None => Vec::new(),
-            Some(routing_stack) => match &router.routes_config {
-                RouteConfig::Rip(rip_config) => router_configure_rip_commands(&router_name, &os, &routing_stack, &rip_config, &router.nics)?,
-                RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&os, &routing_stack, &ospf_config),
+            Some(_) => match &router.routes_config {
+                RouteConfig::Rip(rip_config) => router_configure_rip_commands(&command_context, &rip_config)?,
+                RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&command_context, &ospf_config)?,
                 RouteConfig::Bgp => Vec::new(),
                 RouteConfig::Mpls => Vec::new(),
                 // Handled before
@@ -327,12 +335,20 @@ pub async fn run_experiment(
         let router  = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
+        let command_context = CommandContext {
+            router_name,
+            router: &router,
+            os,
+            network_stack: None,
+            routing_stack: None,
+        };
+
         if let Some(monitor) = &os.resources_monitor_commands {
             let gns3_node = node.gns3_node.as_ref().unwrap();
 
             let monitor_commands = monitor
                 .iter()
-                .filter_map(|c| c.to_os_command(&os, None))
+                .filter_map(|c| c.to_os_command(&command_context, None))
                 .collect();
 
             monitor_threads.spawn(monitor_task(

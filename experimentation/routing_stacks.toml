@@ -1,20 +1,98 @@
 ["BIRD2"]
-    start = []
-    stop = []
+    start = [
+        { send = "sysrc frr_enable=NO", assert_true = [["OS", "BSDRP-BIRD2"]] },
+        { send = "sysrc bird_enable=YES", assert_true = [["OS", "BSDRP-BIRD2"]] },
+        "rm /usr/local/etc/bird.conf",
+        """cat <<EOF >> /usr/local/etc/bird.conf
+router id {ROUTER_ID};
+
+protocol device {
+}
+
+protocol direct {
+    ipv4;
+}
+
+protocol kernel {
+    ipv4 {
+        import all;
+        export all;
+    };
+}
+EOF"""
+    ]
+    RIP = {
+        start = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+protocol rip {
+    ipv4 {
+        import all;
+        export all;
+    };
+EOF"""
+        ],
+        enable_interface = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+    interface "{INTERFACE_PREFIX}{INTERFACE}" {
+        version 2;
+        mode multicast;
+        update time 30;
+    };
+EOF"""
+        ],
+        add_network = [],
+        stop = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+}
+EOF"""
+        ]
+    }
+    OSPF = {
+        start = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+protocol ospf v2 ospf1 {
+ipv4 {
+import all;
+export all;
+};
+
+area 0 {
+EOF"""
+        ],
+        add_area = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+        interface "{INTERFACE_PREFIX}{INTERFACE}" {
+            type broadcast;
+        };
+EOF"""
+        ],
+        add_network = [],
+        stop = [
+            """cat <<EOF >> /usr/local/etc/bird.conf
+    };
+}
+EOF"""
+        ]
+    }
+    stop = [
+        "service bird start",
+        "birdc configure"
+    ]
 
 ["FRR"]
     start = [
         # SONiC only to actiave RIP
-        { send = "docker exec -it bgp bash", assert_true = ["OS", "SONiC"] },
-        { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = ["OS", "SONiC"] },
-        { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = ["OS", "SONiC"] },
-        { expect = ":/", send = "exit", assert_true = ["OS", "SONiC"] },
-        { send = "sleep 15", assert_true = ["OS", "SONiC"] },
+        { send = "docker exec -it bgp bash", assert_true = [["OS", "SONiC"]] },
+        { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "RIP"]] },
+        { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "OSPF"]] },
+        { expect = ":/", send = "exit", assert_true = [["OS", "SONiC"]] },
+        { send = "sleep 15", assert_true = [["OS", "SONiC"]] },
 
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },
     ]
     RIP = {
+        start = [],
         enable_interface = [
             { expect = "(config)# ", send = "interface {INTERFACE_PREFIX}{INTERFACE}" },
             { expect = "(config-if)# ", send = "ip rip send version 2" },
@@ -25,21 +103,24 @@
             { expect = "(config)# ", send = "router rip" },
             { expect = "(config-router)# ", send = "version 2" },
             { expect = "(config-router)# ", send = "network {DISTANT_NETWORK}" },
-            #{ expect = "(config-router)# ", send = "redistribute connected" },
+            { expect = "(config-router)# ", send = "redistribute connected" },
             { expect = "(config-router)# ", send = "exit" }
-        ]
+        ],
+        stop = []
     }
     OSPF = {
-        set_router_id = [
+        start = [
             { expect = "(config)# ", send = "router ospf" },
             { expect = "(config-router)# ", send = "router-id {ROUTER_ID}" },
             { expect = "(config-router)# ", send = "exit" }
         ],
+        add_area = [],
         add_network = [
             { expect = "(config)# ", send = "router ospf" },
             { expect = "(config-router)# ", send = "network {DISTANT_NETWORK} area {AREA}" },
             { expect = "(config-router)# ", send = "exit" }
         ],
+        stop = []
     }
     stop = [
         { expect = "(config)# ", send = "exit" },
@@ -51,4 +132,28 @@
 
 ["MikroTik routing stack"]
     start = []
+    RIP = {
+        start = [
+            "routing rip set redistribute-connected=yes\r\n"
+        ],
+        enable_interface = [
+            "routing rip interface add interface={INTERFACE_PREFIX}{INTERFACE} receive=v2 send=v2\r\n"
+        ],
+        add_network = [
+            "routing rip network add network={DISTANT_NETWORK}\r\n"
+        ],
+        stop = []
+    }
+    OSPF = {
+        start = [
+            "routing ospf instance add name=ospf-instance-1 router-id={ROUTER_ID}\r\n"
+        ],
+        add_area = [
+            "routing ospf area add name=area{AREA} instance=ospf-instance-1 area-id={AREA}.{AREA}.{AREA}.{AREA}\r\n",
+        ],
+        add_network = [
+            "routing ospf network add area=area{AREA} network={DISTANT_NETWORK}\r\n"
+        ],
+        stop = []
+    }
     stop = []

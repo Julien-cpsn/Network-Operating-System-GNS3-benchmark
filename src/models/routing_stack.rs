@@ -13,12 +13,16 @@ pub struct RoutingStack {
 
 #[derive(Debug, Deserialize)]
 pub struct RipCommands {
+    pub start: Vec<DeserializedOsCommandType>,
     pub enable_interface: Vec<DeserializedOsCommandType>,
     pub add_network: Vec<DeserializedOsCommandType>,
+    pub stop: Vec<DeserializedOsCommandType>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OspfCommands {
-    pub set_router_id: Vec<DeserializedOsCommandType>,
+    pub start: Vec<DeserializedOsCommandType>,
+    pub add_area: Vec<DeserializedOsCommandType>,
     pub add_network: Vec<DeserializedOsCommandType>,
+    pub stop: Vec<DeserializedOsCommandType>,
 }

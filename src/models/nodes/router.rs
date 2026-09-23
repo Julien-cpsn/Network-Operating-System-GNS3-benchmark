@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Router {
+    pub id: String,
     pub os_name: String,
     pub number_nics: u32,
     pub nics: IndexMap<NicIndex, Nic>,

@@ -17,6 +17,8 @@ pub fn parse_routing_stack_list_file() -> anyhow::Result<IndexMap<String, Routin
         exit(1);
     }
 
+    debug!(target: TARGET, "Parsing routing stack list");
+
     let routing_stack_list_content = fs::read_to_string(&*ROUTING_STACK_LIST_PATH)?;
     let routing_stacks: IndexMap<String, RoutingStack> = toml::from_str(&routing_stack_list_content)?;
 

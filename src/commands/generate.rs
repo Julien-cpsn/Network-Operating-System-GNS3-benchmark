@@ -111,6 +111,8 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                 continue;
                             }
 
+                            let mut router_id: u8 = 0;
+
                             let mut nodes = IndexMap::new();
 
                             for (key, generic_node) in &topology.network.nodes {
@@ -141,6 +143,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                         }
 
                                         let node_type = NodeType::Router(Router {
+                                            id: format!("{router_id}.{router_id}.{router_id}.{router_id}"),
                                             os_name: os_name.to_owned(),
                                             number_nics: router.number_nics,
                                             nics,
@@ -162,6 +165,8 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                 };
 
                                 nodes.insert(key.to_owned(), node);
+
+                                router_id += 1;
                             }
 
                             for (index, physical_link) in topology.network.physical_links.iter().enumerate() {

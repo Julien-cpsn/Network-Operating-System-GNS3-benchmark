@@ -28,7 +28,7 @@
         "\r\n"
     ]
     add_ip_address = [
-        "ip address add address={IP_ADDRESS} interface={INTERFACE_PREFIX}{INTERFACE}\r\n"
+        "ip address add address={IP_ADDRESS}/{NETWORK_LENGTH} interface={INTERFACE_PREFIX}{INTERFACE}\r\n"
     ]
     add_static_route = [
         "ip route add dst-address={DISTANT_NETWORK} gateway={INTERFACE_PREFIX}{INTERFACE}\r\n"

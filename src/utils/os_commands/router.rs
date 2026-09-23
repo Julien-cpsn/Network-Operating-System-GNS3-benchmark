@@ -1,10 +1,9 @@
 use crate::models::network_stack::NetworkStack;
 use crate::models::nic::{NicIndex, NicType};
 use crate::models::operating_system::OperatingSystem;
-use crate::models::os_command::OsCommand;
+use crate::models::os_command::{CommandContext, OsCommand};
 use crate::models::routing_stack::RoutingStack;
 use cidr::Ipv4Inet;
-use std::collections::HashMap;
 
 pub fn router_login_commands(os: &OperatingSystem) -> Vec<OsCommand> {
     let mut commands = Vec::new();
@@ -26,45 +25,13 @@ pub fn router_login_commands(os: &OperatingSystem) -> Vec<OsCommand> {
     commands
 }
 
-pub fn router_start_network_stack_commands(os: &OperatingSystem, network_stack: &NetworkStack) -> Vec<OsCommand> {
+pub fn router_start_network_stack_commands(command_context: &CommandContext, network_stack: &NetworkStack) -> anyhow::Result<Vec<OsCommand>> {
     let mut commands = Vec::new();
+
+    let to_replace = command_context.to_replace_map(None)?;
 
     for start in &network_stack.start {
-        if let Some(command) = start.to_os_command(&os, None) {
-        commands.push(command);
-        }
-    }
-
-    commands
-}
-
-pub fn router_stop_network_stack_commands(os: &OperatingSystem, network_stack: &NetworkStack) -> Vec<OsCommand> {
-    let mut commands = Vec::new();
-
-    for stop in &network_stack.stop {
-        if let Some(command) = stop.to_os_command(&os, None) {
-        commands.push(command);
-        }
-    }
-
-    commands
-}
-
-pub fn router_add_ip_address_commands(os: &OperatingSystem, network_stack: &NetworkStack, nic_index: &NicIndex, nic_type: &NicType, ip_address: &Ipv4Inet) -> anyhow::Result<Vec<OsCommand>> {
-    let mut commands = Vec::new();
-
-    let interface_index =  os.gap_between_interfaces * (os.interfaces_start_at + nic_index.to_u16()? as i16) as u16;
-
-    let to_replace = HashMap::from([
-        ("{IP_ADDRESS}", ip_address.address().to_string()),
-        ("{INTERFACE_PREFIX}", os.interface_prefix(&nic_type)?),
-        ("{INTERFACE}", interface_index.to_string()),
-        ("{MASK}", ip_address.mask().to_string()),
-        ("{NETWORK_LENGTH}", ip_address.network_length().to_string()),
-    ]);
-
-    for add_ip_address in &network_stack.add_ip_address {
-        if let Some(command) = add_ip_address.to_os_command(&os, Some(&to_replace)) {
+        if let Some(command) = start.to_os_command(&command_context, Some(&to_replace)) {
         commands.push(command);
         }
     }
@@ -72,26 +39,69 @@ pub fn router_add_ip_address_commands(os: &OperatingSystem, network_stack: &Netw
     Ok(commands)
 }
 
-pub fn router_start_routing_stack_commands(os: &OperatingSystem, routing_stack: &RoutingStack) -> Vec<OsCommand> {
+pub fn router_stop_network_stack_commands(command_context: &CommandContext, network_stack: &NetworkStack) -> anyhow::Result<Vec<OsCommand>> {
     let mut commands = Vec::new();
 
-    for start in &routing_stack.start {
-        if let Some(command) = start.to_os_command(&os, None) {
+    let to_replace = command_context.to_replace_map(None)?;
+
+    for stop in &network_stack.stop {
+        if let Some(command) = stop.to_os_command(&command_context, Some(&to_replace)) {
         commands.push(command);
         }
     }
 
-    commands
+    commands.push(OsCommand::new_line(&command_context.os.input_ready));
+
+    Ok(commands)
 }
 
-pub fn router_stop_routing_stack_commands(os: &OperatingSystem, routing_stack: &RoutingStack) -> Vec<OsCommand> {
+pub fn router_add_ip_address_commands(command_context: &CommandContext, nic_index: &NicIndex, nic_type: &NicType, ip_address: &Ipv4Inet) -> anyhow::Result<Vec<OsCommand>> {
     let mut commands = Vec::new();
 
-    for stop in &routing_stack.stop {
-        if let Some(command) = stop.to_os_command(&os, None) {
+    let interface_index = command_context.os.gap_between_interfaces * (command_context.os.interfaces_start_at + nic_index.to_u16()? as i16) as u16;
+
+    let mut to_replace = command_context.to_replace_map(Some(&nic_type))?;
+    to_replace.insert(String::from("{IP_ADDRESS}"), ip_address.address().to_string());
+    to_replace.insert(String::from("{INTERFACE}"), interface_index.to_string());
+    to_replace.insert(String::from("{MASK}"), ip_address.mask().to_string());
+    to_replace.insert(String::from("{NETWORK_LENGTH}"), ip_address.network_length().to_string());
+
+    let network_stack = command_context.network_stack.as_ref().unwrap();
+    for add_ip_address in &network_stack.add_ip_address {
+        if let Some(command) = add_ip_address.to_os_command(&command_context, Some(&to_replace)) {
         commands.push(command);
         }
     }
 
-    commands
+    Ok(commands)
+}
+
+pub fn router_start_routing_stack_commands(command_context: &CommandContext, routing_stack: &RoutingStack) -> anyhow::Result<Vec<OsCommand>> {
+    let mut commands = Vec::new();
+
+    let to_replace = command_context.to_replace_map(None)?;
+
+    for start in &routing_stack.start {
+        if let Some(command) = start.to_os_command(&command_context, Some(&to_replace)) {
+        commands.push(command);
+        }
+    }
+
+    Ok(commands)
+}
+
+pub fn router_stop_routing_stack_commands(command_context: &CommandContext, routing_stack: &RoutingStack) -> anyhow::Result<Vec<OsCommand>> {
+    let mut commands = Vec::new();
+
+    let to_replace = command_context.to_replace_map(None)?;
+
+    for stop in &routing_stack.stop {
+        if let Some(command) = stop.to_os_command(&command_context, Some(&to_replace)) {
+        commands.push(command);
+        }
+    }
+
+    commands.push(OsCommand::new_line(&command_context.os.input_ready));
+
+    Ok(commands)
 }

@@ -67,6 +67,12 @@ Then you should see all possible experiments created in `./experimentation/exper
 > source .venv/bin/activate
 > ```
 
+Run the GNS3 server:
+
+```shell
+gns3server --local
+```
+
 Then you can run experiments:
 
 ```shell
