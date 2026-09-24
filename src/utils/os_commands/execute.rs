@@ -46,83 +46,15 @@ pub fn execute_commands(
 
         telnet.send_line("")?;
 
-        let mut last_command: Option<&SendType> = None;
 
-        for command in &commands {
-            let now = Instant::now();
+        for (index, command) in commands.iter().enumerate() {
+            debug!(target: "tx", "{: >2}/{: >2} > {}", index+1, commands.len(), &command.send);
 
-            if let Some(last_command) = last_command {
-                let last_command = last_command.to_string();
-
-                if !last_command.is_empty() {
-                    debug!(target: "tx", "> {}", &last_command);
-                }
-            }
-
-            last_command = Some(&command.send);
-
-            'timeout_loop: loop {
-                /*
-                if now.elapsed() >= TIMEOUT {
-                    return Err(anyhow::anyhow!("Command \"{}\" timed out when waiting for \"{}\"", &command.send, &command.expect));
-                }*/
-
-                // Cause we never know
-                sleep(Duration::from_millis(100));
-
-                let expect_err = telnet.exp_string(&command.expect);
-
-                if let Ok(buffer) = expect_err {
-                    trace!(target: "rx", "{}", buffer);
-                    break 'timeout_loop;
-                }
-                else if command.can_fail {
-                    trace_telnet_output(&mut telnet)?;
-                    break 'timeout_loop;
-                }
-                else {
-                    trace_telnet_output(&mut telnet)?;
-
-                    if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
-                        trace!(target: TARGET, "remote stop");
-                        break 'timeout_loop;
-                    }
-
-                    continue 'timeout_loop;
-                }
-            }
-
-            match &command.send {
-                SendType::NewLine => {
-                  let _ = telnet.send_line("");
-                },
-                SendType::Text(text, new_line) => match *new_line {
-                    true => {
-                        let _ = telnet.send_line(&text);
-                    }
-                    false => {
-                        let _ = telnet.send(&text);
-                        let _ = telnet.flush();
-                    }
-                },
-                SendType::Ctrl(char) => {
-                    let _ = telnet.send_control(*char);
-                },
-                SendType::Wait(time_ms) => {
-                    let to_wait = Duration::from_millis(*time_ms);
-
-                    'wait_loop: while now.elapsed() < to_wait {
-                        trace_telnet_output(&mut telnet)?;
-                        sleep(Duration::from_millis(100));
-
-                        if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
-                            trace!(target: TARGET, "remote stop");
-                            break 'wait_loop;
-                        }
-                    }
-                }
-            };
+            wait_loop(&mut telnet, &command, &remote_stop)?;
+            send_command(&mut telnet, &command, &remote_stop)?;
         }
+
+        sleep(Duration::from_millis(100));
 
         debug!(target: TARGET, "End commands for {}", node_name);
 
@@ -133,6 +65,80 @@ pub fn execute_commands(
 
         Ok(())
     })
+}
+
+fn wait_loop(telnet: &mut PtySession, command: &OsCommand, remote_stop: &Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
+    'timeout_loop: loop {
+        /*
+        if now.elapsed() >= TIMEOUT {
+            return Err(anyhow::anyhow!("Command \"{}\" timed out when waiting for \"{}\"", &command.send, &command.expect));
+        }*/
+
+        // Cause we never know
+        sleep(Duration::from_millis(100));
+
+        let expect_err = telnet.exp_string(&command.expect);
+
+        if let Ok(buffer) = expect_err {
+            trace!(target: "rx", "{}", buffer);
+            break 'timeout_loop;
+        }
+        else if command.can_fail {
+            trace_telnet_output(telnet)?;
+            break 'timeout_loop;
+        }
+        else {
+            trace_telnet_output(telnet)?;
+
+            if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
+                trace!(target: TARGET, "remote stop");
+                break 'timeout_loop;
+            }
+
+            continue 'timeout_loop;
+        }
+    }
+
+    Ok(())
+}
+
+fn send_command(telnet: &mut PtySession, command: &OsCommand, remote_stop: &Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
+    let now = Instant::now();
+
+    //println!("{:?}", &command);
+
+    match &command.send {
+        SendType::NewLine => {
+            let _ = telnet.send_line("");
+        },
+        SendType::Text(text, new_line) => match *new_line {
+            true => {
+                let _ = telnet.send_line(&text);
+            }
+            false => {
+                let _ = telnet.send(&text);
+                let _ = telnet.flush();
+            }
+        },
+        SendType::Ctrl(char) => {
+            let _ = telnet.send_control(*char);
+        },
+        SendType::Wait(time_ms) => {
+            let to_wait = Duration::from_millis(*time_ms);
+
+            'wait_loop: while now.elapsed() < to_wait {
+                trace_telnet_output(telnet)?;
+                sleep(Duration::from_millis(100));
+
+                if let Some(remote_stop) = &remote_stop && remote_stop.load(Ordering::Relaxed) == true {
+                    trace!(target: TARGET, "remote stop");
+                    break 'wait_loop;
+                }
+            }
+        }
+    };
+
+    Ok(())
 }
 
 fn trace_telnet_output(telnet: &mut PtySession) -> anyhow::Result<()> {

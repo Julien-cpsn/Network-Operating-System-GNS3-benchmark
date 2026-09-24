@@ -39,6 +39,7 @@ use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
 use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY};
 use crate::utils::os_commands::router::{router_add_ip_address_commands, router_login_commands, router_start_network_stack_commands, router_start_routing_stack_commands, router_stop_network_stack_commands, router_stop_routing_stack_commands};
+use crate::utils::os_commands::routing::bpg_config::router_configure_bgp_commands;
 use crate::utils::os_commands::routing::ospf_config::router_configure_ospf_commands;
 use crate::utils::os_commands::routing::rip_config::router_configure_rip_commands;
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
@@ -296,7 +297,7 @@ pub async fn run_experiment(
             Some(_) => match &router.routes_config {
                 RouteConfig::Rip(rip_config) => router_configure_rip_commands(&command_context, &rip_config)?,
                 RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&command_context, &ospf_config)?,
-                RouteConfig::Bgp => Vec::new(),
+                RouteConfig::Bgp(bgp_config) => router_configure_bgp_commands(&command_context, &bgp_config)?,
                 RouteConfig::Mpls => Vec::new(),
                 // Handled before
                 RouteConfig::Static(_) => Vec::new()

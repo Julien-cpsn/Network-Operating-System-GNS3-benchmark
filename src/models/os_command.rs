@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OsCommand {
     pub expect: String,
     pub send: SendType,
@@ -16,7 +16,7 @@ pub struct OsCommand {
 }
 
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum SendType {
     #[default]
     NewLine,

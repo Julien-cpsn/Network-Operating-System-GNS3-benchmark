@@ -50,31 +50,31 @@
         }
     }
 
-[Dumbbell]
-    supported_routing_protocols = ["static", "RIP", "OSPF"]
+[Double]
+    supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
 
-    [Dumbbell.network]
+    [Double.network]
     physical_links = [
         { node_a = "Client", adapter_a = 0, node_b = "Router 1", adapter_b = 3 },
         { node_a = "Router 1", adapter_a = 4, node_b = "Router 2", adapter_b = 3 },
         { node_a = "Server", adapter_a = 0, node_b = "Router 2", adapter_b = 4 },
     ]
 
-    [Dumbbell.network.nodes.Client]
+    [Double.network.nodes.Client]
     vcpu = 2
     ram = 2048
     ip = "10.0.1.2/24"
     x = -300
     y = 0
 
-    [Dumbbell.network.nodes.Server]
+    [Double.network.nodes.Server]
     vcpu = 2
     ram = 2048
     ip = "10.0.3.2/24"
     x = 300
     y = 0
 
-    [Dumbbell.network.nodes."Router 1"]
+    [Double.network.nodes."Router 1"]
     number_nics = 6
     ips = { 3 = "10.0.1.1/24", 4 = "10.0.2.1/24" }
     x = -100
@@ -88,7 +88,6 @@
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.1.0/24", "10.0.2.0/24"]
         },
-
         OSPF = {
             router_id = "1.1.1.1",
             areas_to_add = {
@@ -98,10 +97,17 @@
                 { network = "10.0.1.0/24", area = 0 },
                 { network = "10.0.2.0/24", area = 0 }
             ]
+        },
+        BGP = {
+            local_as = 1,
+            neighbors = [
+                { address = "10.0.2.2", remote_as = 2 }
+            ],
+            networks_to_advertise = ["10.0.1.0/24"]
         }
     }
 
-    [Dumbbell.network.nodes."Router 2"]
+    [Double.network.nodes."Router 2"]
     number_nics = 6
     ips = { 3 = "10.0.2.2/24", 4 = "10.0.3.1/24" }
     x = 100
@@ -115,7 +121,6 @@
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.2.0/24", "10.0.3.0/24"]
         },
-
         OSPF = {
             router_id = "2.2.2.2",
             areas_to_add = {
@@ -125,5 +130,12 @@
                 { network = "10.0.2.0/24", area = 0 },
                 { network = "10.0.3.0/24", area = 0 }
             ]
+        },
+        BGP = {
+            local_as = 2,
+            neighbors = [
+                { address = "10.0.2.1", remote_as = 1 }
+            ],
+            networks_to_advertise = ["10.0.3.0/24"]
         }
     }

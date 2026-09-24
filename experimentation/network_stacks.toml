@@ -31,12 +31,33 @@
         "ip address add address={IP_ADDRESS}/{NETWORK_LENGTH} interface={INTERFACE_PREFIX}{INTERFACE}\r\n"
     ]
     add_static_route = [
-        "ip route add dst-address={DISTANT_NETWORK} gateway={INTERFACE_PREFIX}{INTERFACE}\r\n"
+        "ip route add dst-address={DISTANT_NETWORK} gateway={GATEWAY}\r\n"
     ]
     stop = []
 
 ["SONiC CLI"]
-    start = []
+    start = [
+        "sudo vtysh",
+        { expect = "# ", send = "configure terminal" },
+        { expect = "(config)# ", send = "no router bgp 65100" },
+        { expect = "(config)# ", send = "no ip prefix-list DEFAULT_IPV4" },
+        { expect = "(config)# ", send = "no ip prefix-list PL_LoopbackV4" },
+        { expect = "(config)# ", send = "no ipv6 prefix-list DEFAULT_IPV6" },
+        { expect = "(config)# ", send = "no route-map RM_SET_SRC" },
+        { expect = "(config)# ", send = "no route-map ALLOW_LIST_DEPLOYMENT_ID_0_V4" },
+        { expect = "(config)# ", send = "no route-map ALLOW_LIST_DEPLOYMENT_ID_0_V6" },
+        { expect = "(config)# ", send = "no route-map FROM_BGP_PEER_V4" },
+        { expect = "(config)# ", send = "no route-map FROM_BGP_PEER_V6" },
+        { expect = "(config)# ", send = "no route-map TO_BGP_PEER_V4" },
+        { expect = "(config)# ", send = "no route-map TO_BGP_PEER_V6" },
+        { expect = "(config)# ", send = "no route-map CHECK_IDF_ISOLATION" },
+        { expect = "(config)# ", send = "no bgp community-list standard allow_list_default_community" },
+        { expect = "(config)# ", send = "no ip protocol bgp route-map RM_SET_SRC" },
+        { expect = "(config)# ", send = "exit" },
+        { expect = "# ", send = "write memory" },
+        { expect = "# ", send = "end" },
+        { expect = "# ", send = "exit" },
+    ]
     add_ip_address = [
         "sudo config interface ip add {INTERFACE_PREFIX}{INTERFACE} {IP_ADDRESS}/{NETWORK_LENGTH}"
     ]

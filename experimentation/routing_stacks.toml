@@ -29,51 +29,73 @@ protocol rip {
         import all;
         export all;
     };
+
+    RIP_INTERFACES
+}
 EOF"""
         ],
         enable_interface = [
-            """cat <<EOF >> /usr/local/etc/bird.conf
-    interface "{INTERFACE_PREFIX}{INTERFACE}" {
-        version 2;
-        mode multicast;
-        update time 30;
-    };
-EOF"""
+            "sed -i .orig 's|RIP_INTERFACES|interface \"{INTERFACE_PREFIX}{INTERFACE}\" {\\n\\t\\tversion 2;\\n\\t\\tmode multicast;\\n\\t\\tupdate time 30;\\n\\t};\\n\\tRIP_INTERFACES|' /usr/local/etc/bird.conf"
         ],
         add_network = [],
         stop = [
-            """cat <<EOF >> /usr/local/etc/bird.conf
-}
-EOF"""
+            "sed -i .orig 's/RIP_INTERFACES//' /usr/local/etc/bird.conf"
         ]
     }
+
     OSPF = {
         start = [
             """cat <<EOF >> /usr/local/etc/bird.conf
 protocol ospf v2 ospf1 {
-ipv4 {
-import all;
-export all;
-};
+    ipv4 {
+        import all;
+        export all;
+    };
 
-area 0 {
-EOF"""
-        ],
-        add_area = [
-            """cat <<EOF >> /usr/local/etc/bird.conf
-        interface "{INTERFACE_PREFIX}{INTERFACE}" {
-            type broadcast;
-        };
-EOF"""
-        ],
-        add_network = [],
-        stop = [
-            """cat <<EOF >> /usr/local/etc/bird.conf
+    area 0 {
+        OSPF_INTERFACES
     };
 }
 EOF"""
+        ],
+        add_area = [
+            "sed -i .orig 's|OSPF_INTERFACES|interface \"{INTERFACE_PREFIX}{INTERFACE}\" {\\n\\t\\ttype broadcast;\\n\\t\\t};\\n\\t\\tOSPF_INTERFACES|' /usr/local/etc/bird.conf"
+        ],
+        add_network = [],
+        stop = [
+            "sed -i .orig 's/OSPF_INTERFACES//' /usr/local/etc/bird.conf"
         ]
     }
+    BGP = {
+        start = [
+        """cat <<EOF >> /usr/local/etc/bird.conf
+filter bgp_export {
+    BGP_NETWORKS
+    reject;
+}
+
+protocol bgp bgp1 {
+    local as {LOCAL_AS};
+
+    BGP_NEIGHBORS
+    ipv4 {
+        import all;
+        export filter bgp_export;
+    };
+}
+EOF"""
+        ],
+        add_neighbor = [
+            "sed -i .orig 's/BGP_NEIGHBORS/neighbor {NEIGHBOR_ADDRESS} as {REMOTE_AS};\\nBGP_NEIGHBORS/' /usr/local/etc/bird.conf"
+        ],
+        add_network_to_advertise = [
+            "sed -i .orig 's|BGP_NETWORKS|if net = {DISTANT_NETWORK} then accept;\\nBGP_NETWORKS|' /usr/local/etc/bird.conf"
+        ],
+        stop = [
+            "sed -i .orig 's/BGP_NEIGHBORS//' /usr/local/etc/bird.conf",
+            "sed -i .orig 's/BGP_NETWORKS//' /usr/local/etc/bird.conf",
+        ]
+}
     stop = [
         "service bird start",
         "birdc configure"
@@ -93,10 +115,13 @@ EOF"""
         { send = "sysrc frr_enable=YES", assert_true = [["OS", "BSDRP-FRR"]] },
         { send = "sysrc frr_daemons=\"zebra ripd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "RIP"]] },
         { send = "sysrc frr_daemons=\"zebra ospfd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "OSPF"]] },
+        { send = "sysrc frr_daemons=\"zebra bgpd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "BGP"]] },
         { send = "/usr/local/etc/rc.d/frr start", assert_true = [["OS", "BSDRP-FRR"]] },
 
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },
+        { expect = "(config)# ", send = "route-map BGP-PERMIT-ALL permit 10", assert_true = [["ROUTING_PROTOCOL", "BGP"]] },
+        { expect = "(config-route-map)# ", send = "exit", assert_true = [["ROUTING_PROTOCOL", "BGP"]]  },
     ]
     RIP = {
         start = [],
@@ -128,12 +153,28 @@ EOF"""
             { expect = "(config-router)# ", send = "exit" }
         ]
     }
+    BGP = {
+        start = [
+            { expect = "(config)# ", send = "router bgp {LOCAL_AS}" },
+            { expect = "(config-router)# ", send = "bgp router-id {ROUTER_ID}" },
+        ],
+        add_neighbor = [
+            { expect = "(config-router)# ", send = "neighbor {NEIGHBOR_ADDRESS} remote-as {REMOTE_AS}" },
+            { expect = "(config-router)# ", send = "neighbor {NEIGHBOR_ADDRESS} route-map BGP-PERMIT-ALL in" },
+            { expect = "(config-router)# ", send = "neighbor {NEIGHBOR_ADDRESS} route-map BGP-PERMIT-ALL out" },
+        ],
+        add_network_to_advertise = [
+            { expect = "(config-router)# ", send = "network {DISTANT_NETWORK}" },
+        ],
+        stop = [
+            { expect = "(config-router)# ", send = "exit" }
+        ]
+    }
     stop = [
         { expect = "(config)# ", send = "exit" },
         { expect = "# ", send = "write memory" },
         { expect = "# ", send = "end" },
         { expect = "# ", send = "exit" },
-        { expect = "", send = "" },
     ]
 
 ["MikroTik routing stack"]
@@ -159,6 +200,19 @@ EOF"""
         ],
         add_network = [
             "routing ospf network add area=area{AREA} network={DISTANT_NETWORK}\r\n"
+        ],
+        stop = []
+    }
+    BGP = {
+        start = [
+            "routing bgp instance add name=bgp-instance-1 as={LOCAL_AS} router-id={ROUTER_ID}\r\n"
+        ],
+        add_neighbor = [
+            "routing bgp peer add name=bgp-peer-{REMOTE_AS} instance=bgp-instance-1 remote-address={NEIGHBOR_ADDRESS} remote-as={REMOTE_AS}\r\n"
+        ],
+        add_network_to_advertise = [
+            "ip route add dst-address={DISTANT_NETWORK} type=blackhole\r\n",
+            "routing bgp network add network={DISTANT_NETWORK}\r\n",
         ],
         stop = []
     }

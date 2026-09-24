@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::models::protocol::RoutingProtocol;
+use crate::models::routes::bgp_config::BgpConfig;
 use crate::models::routes::ospf_config::OspfConfig;
 use crate::models::routes::rip_config::RipConfig;
 use crate::models::routes::static_route::StaticRoute;
@@ -10,7 +11,7 @@ pub enum RouteConfig {
     Static(Vec<StaticRoute>),
     Rip(RipConfig),
     Ospf(OspfConfig),
-    Bgp,
+    Bgp(BgpConfig),
     Mpls
 }
 
@@ -20,7 +21,7 @@ impl RouteConfig {
             RouteConfig::Static(_) => RoutingProtocol::Static,
             RouteConfig::Rip(_) => RoutingProtocol::Rip,
             RouteConfig::Ospf(_) => RoutingProtocol::Ospf,
-            RouteConfig::Bgp => RoutingProtocol::Bgp,
+            RouteConfig::Bgp(_) => RoutingProtocol::Bgp,
             RouteConfig::Mpls => RoutingProtocol::Mpls
         }
     }
