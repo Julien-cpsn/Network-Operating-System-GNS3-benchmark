@@ -139,7 +139,7 @@ pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &s
             initrd: String::new(),
             tpm: false,
             uefi: false,
-            options: String::from("-mem-prealloc"),
+            options: String::from("-mem-prealloc -cpu host"),
             usage: String::new(),
         }),
     };

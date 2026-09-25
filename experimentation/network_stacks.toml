@@ -98,3 +98,27 @@
         "sudo config interface ip remove Ethernet120 10.0.0.60/31",
         "sudo config interface ip remove Ethernet124 10.0.0.62/31"
     ]
+
+["Vyatta"]
+    start = [
+        "configure",
+        { expect = "node#", send = "set system login user tmpuser level superuser" },
+        { expect = "node#", send = "commit" },
+        { expect = "node#", send = "exit" },
+        "exit",
+        { expect = "ogin:", send = "{LOGIN}" },
+        { expect = "assword:", send = "{PASSWORD}" },
+    ]
+    add_ip_address = [
+        "configure",
+        { expect = "node#", send = "set interfaces dataplane {INTERFACE_PREFIX}{INTERFACE} address {IP_ADDRESS}/{NETWORK_LENGTH}" },
+        { expect = "node#", send = "commit" },
+        { expect = "node#", send = "exit" }
+    ]
+    add_static_route = [
+        "configure",
+        { expect = "node#", send = "set protocols static route {DISTANT_NETWORK} next-hop {GATEWAY}" },
+        { expect = "node#", send = "commit" },
+        { expect = "node#", send = "exit" }
+    ]
+    stop = []

@@ -47,8 +47,8 @@ def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
     if not timestamps:
         return None, None
 
-    measurement_start = start_time - timedelta(seconds=5)
-    measurement_end = end_time + timedelta(seconds=5)
+    measurement_start = start_time - timedelta(seconds=10)
+    measurement_end = end_time + timedelta(seconds=10)
 
     filtered = [
         (t, mem, cpu)

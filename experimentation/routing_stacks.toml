@@ -103,12 +103,10 @@ EOF"""
 
 ["FRR"]
     start = [
-        # SONiC only
-        { send = "docker exec -it bgp bash", assert_true = [["OS", "SONiC"]] },
-        { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "RIP"]] },
-        { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "OSPF"]] },
-        { expect = ":/", send = "exit", assert_true = [["OS", "SONiC"]] },
-        { send = "sleep 15", assert_true = [["OS", "SONiC"]] },
+        # DANOS
+        { send = "sudo /usr/lib/frr/ripd -d", assert_true = [["OS", "DANOS"], ["ROUTING_PROTOCOL", "RIP"]] },
+        #{ send = "sudo /usr/lib/frr/ospfd -d", assert_true = [["OS", "DANOS"], ["ROUTING_PROTOCOL", "OSPF"]] },
+        #{ send = "sudo /usr/lib/frr/bgpd -d", assert_true = [["OS", "DANOS"], ["ROUTING_PROTOCOL", "BGP"]] },
 
         # BSDRP FRR
         { send = "sysrc bird_enable=NO", assert_true = [["OS", "BSDRP-FRR"]] },
@@ -117,6 +115,13 @@ EOF"""
         { send = "sysrc frr_daemons=\"zebra ospfd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "OSPF"]] },
         { send = "sysrc frr_daemons=\"zebra bgpd\"", assert_true = [["OS", "BSDRP-FRR"], ["ROUTING_PROTOCOL", "BGP"]] },
         { send = "/usr/local/etc/rc.d/frr start", assert_true = [["OS", "BSDRP-FRR"]] },
+
+        # SONiC only
+        { send = "docker exec -it bgp bash", assert_true = [["OS", "SONiC"]] },
+        { expect = ":/", send = "/usr/lib/frr/ripd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "RIP"]] },
+        { expect = ":/", send = "/usr/lib/frr/ospfd -d", assert_true = [["OS", "SONiC"], ["ROUTING_PROTOCOL", "OSPF"]] },
+        { expect = ":/", send = "exit", assert_true = [["OS", "SONiC"]] },
+        { send = "sleep 15", assert_true = [["OS", "SONiC"]] },
 
         "sudo vtysh",
         { expect = "# ", send = "configure terminal" },

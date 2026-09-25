@@ -48,6 +48,25 @@ done""",
         { expect = "", control = 'c' }
     ]
 
+[DANOS]
+    input_ready = ":~"
+    login = "tmpuser"
+    password = "tmppwd"
+    network_stack = "Vyatta"
+    routing_stack = "FRR"
+    interface_prefix = "dp0s"
+    interfaces_start_at = 3
+    image_path = "/home/julien/Programmation/vm/DANOS/danos-2105-base-amd64.qcow2"
+    resources_monitor_commands = [
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+    while true
+    do
+    free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
+    done""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
+
 [Debian]
     input_ready = ":~"
     login = "root"
