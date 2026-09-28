@@ -1,28 +1,33 @@
 use crate::models::network_stack::NetworkStack;
 use crate::models::nic::{NicIndex, NicType};
-use crate::models::operating_system::OperatingSystem;
 use crate::models::os_command::{CommandContext, OsCommand};
 use crate::models::routing_stack::RoutingStack;
 use cidr::Ipv4Inet;
 
-pub fn router_login_commands(os: &OperatingSystem) -> Vec<OsCommand> {
+pub fn router_login_commands(command_context: &CommandContext) -> anyhow::Result<Vec<OsCommand>> {
     let mut commands = Vec::new();
 
-    if let Some(trigger_sequence) = &os.trigger_sequence {
-        commands.push(OsCommand::new_text(trigger_sequence, "\n", true, false));
+    let to_replace = command_context.to_replace_map(None)?;
+
+    if let Some(trigger_sequence) = &command_context.os.trigger_sequence {
+        for trigger in trigger_sequence {
+            if let Some(command) = trigger.to_os_command(&command_context, Some(&to_replace)) {
+                commands.push(command);
+            }
+        }
     }
 
-    if let Some(login) = &os.login {
+    if let Some(login) = &command_context.os.login {
         commands.push(OsCommand::new_text("ogin:", login, true, false));
     }
 
-    if let Some(password) = &os.password {
+    if let Some(password) = &command_context.os.password {
         commands.push(OsCommand::new_text("assword:", password, true, false));
     }
 
-    commands.push(OsCommand::new_line(&os.input_ready));
+    commands.push(OsCommand::new_line(&command_context.os.input_ready));
 
-    commands
+    Ok(commands)
 }
 
 pub fn router_start_network_stack_commands(command_context: &CommandContext, network_stack: &NetworkStack) -> anyhow::Result<Vec<OsCommand>> {

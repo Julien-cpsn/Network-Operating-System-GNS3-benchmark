@@ -178,10 +178,6 @@ impl CommandContext<'_> {
         map.insert("OS", self.router.os_name.clone());
         map.insert("INPUT_READY", self.os.input_ready.clone());
 
-        if let Some(trigger_sequence) = &self.os.trigger_sequence {
-            map.insert("TRIGGER_SEQUENCE", trigger_sequence.clone());
-        }
-
         if let Some(login) = &self.os.login {
             map.insert("LOGIN", login.clone());
         }
@@ -198,7 +194,6 @@ impl CommandContext<'_> {
 
         map.insert("INTERFACES_START_AT", self.os.interfaces_start_at.to_string());
         map.insert("GAP_BETWEEN_INTERFACES", self.os.gap_between_interfaces.to_string());
-        map.insert("IMAGE_PATH", self.os.image_path.to_string_lossy().into_owned());
 
         map.insert("ROUTER_ID", self.router.id.clone());
         map.insert("ROUTING_PROTOCOL", self.router.routes_config.to_protocol_name().to_string());

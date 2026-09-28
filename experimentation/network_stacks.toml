@@ -1,3 +1,30 @@
+["DNOS10 network stack"]
+    start = [
+        { expect = "", wait = 20_000 },
+        { expect = "", send = "" },
+    ]
+    add_ip_address = [
+        "configure",
+        { expect = "OS10(config)#", send = "interface ethernet {INTERFACE_PREFIX}{INTERFACE}" },
+        { expect = "OS10(conf-if-eth", send = "no switchport" },
+        { expect = "OS10(conf-if-eth", send = "ip address {IP_ADDRESS}/{NETWORK_LENGTH}" },
+        { expect = "OS10(conf-if-eth", send = "no shutdown" },
+        { expect = "OS10(conf-if-eth", send = "exit" },
+        { expect = "OS10(config)#", send = "end" },
+        "write memory",
+    ]
+    add_static_route = [
+        "configure",
+        { expect = "OS10(config)#", send = "ip route {DISTANT_NETWORK} {GATEWAY}" },
+        { expect = "OS10(config)#", send = "end" },
+        "write memory",
+    ]
+    stop = [
+        "exit",
+        { expect = "login:", send = "linuxadmin" },
+        { expect = "Password:", send = "linuxadmin" },
+    ]
+
 ["FreeBSD network stack"]
     start = []
     add_ip_address = [

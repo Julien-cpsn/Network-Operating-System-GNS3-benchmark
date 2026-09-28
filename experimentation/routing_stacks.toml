@@ -101,6 +101,51 @@ EOF"""
         "birdc configure"
     ]
 
+["DNOS10 Routing Stack"]
+    start = []
+    OSPF = {
+        start = [
+            "configure terminal",
+            { expect = "OS10(config)#", send = "router ospf 1" },
+            { expect = "OS10(config-router-ospf", send = "router-id {ROUTER_ID}" },
+            { expect = "OS10(config-router-ospf", send = "exit" },
+            { expect = "OS10(config)#", send = "end" },
+            "write memory",
+        ],
+        add_area = [
+            "configure terminal",
+            { expect = "OS10(config)#", send = "interface ethernet {INTERFACE_PREFIX}{INTERFACE}" },
+            { expect = "OS10(conf-if-eth", send = "ip ospf 1 area {AREA}" },
+            { expect = "OS10(conf-if-eth", send = "exit" },
+            { expect = "OS10(config)#", send = "end" },
+            "write memory",
+        ],
+        add_network = [],
+        stop = []
+    }
+    BGP = {
+        start = [
+            "configure terminal",
+            { expect = "OS10(config)#", send = "router bgp {LOCAL_AS}" },
+        ],
+        add_neighbor = [
+            { expect = "OS10(config-router-bgp", send = "neighbor {NEIGHBOR_ADDRESS}" },
+            { expect = "OS10(config-router-neighbor", send = "remote-as {REMOTE_AS}" },
+            { expect = "OS10(config-router-neighbor", send = "no shutdown" },
+            { expect = "OS10(config-router-neighbor", send = "exit" }
+        ],
+        add_network_to_advertise = [
+            { expect = "OS10(config-router-bgp", send = "address-family ipv4 unicast" },
+            { expect = "OS10(configure-router-bgpv4-af)#", send = "network {DISTANT_NETWORK}" },
+            { expect = "OS10(configure-router-bgpv4-af)#", send = "exit" },
+        ],
+        stop = [
+            { expect = "OS10(config-router-bgp", send = "end" },
+            "write memory",
+        ]
+    }
+    stop = []
+
 ["FRR"]
     start = [
         # DANOS

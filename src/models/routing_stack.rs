@@ -10,6 +10,8 @@ pub struct RoutingStack {
     pub ospf: Option<OspfCommands>,
     #[serde(alias = "BGP")]
     pub bgp: Option<BgpCommands>,
+    #[serde(alias = "MPLS")]
+    pub mpls: Option<MplsCommands>,
     pub stop: Vec<DeserializedOsCommandType>,
 }
 
@@ -35,4 +37,8 @@ pub struct BgpCommands {
     pub add_neighbor: Vec<DeserializedOsCommandType>,
     pub add_network_to_advertise: Vec<DeserializedOsCommandType>,
     pub stop: Vec<DeserializedOsCommandType>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MplsCommands {
 }

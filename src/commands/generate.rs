@@ -61,17 +61,6 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
         exit(0);
     }
 
-    // Experiment count
-    {
-        let mut experiment_count = oses_to_use.len() * test_batches_to_use.len() * resources_to_use.len() * nic_types_to_use.len();
-
-        for topology in topologies_to_use.values() {
-            experiment_count *= topology.supported_routing_protocols.len();
-        }
-
-        info!(target: TARGET, "Total of {} individual experiment",  experiment_count);
-    }
-
     let override_ = match &generate_command.command {
         GenerateSubcommand::Files { override_, .. } => *override_,
         _ => false
@@ -85,8 +74,9 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
     }
 
     let experiment_dir = create_dir_if_does_not_exist(EXPERIMENTS_PATH.clone())?;
+    let mut experiment_count = 0usize;
 
-    for os_name in oses_to_use.keys() {
+    for (os_name, os) in &oses_to_use {
         let os_dir = create_dir_if_does_not_exist(experiment_dir.join(os_name))?;
 
         for (test_batch_name, test_batch) in &test_batches_to_use {
@@ -102,9 +92,29 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                         let topology_dir = create_dir_if_does_not_exist(nic_dir.join(topology_name))?;
 
                         for routing_protocol in &topology.supported_routing_protocols {
+                            if routing_protocol != &RoutingProtocol::Static {
+                                if let Some(routing_stack_name) = &os.routing_stack {
+                                    let routing_stack = routing_stack_list.get(routing_stack_name).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?;
+
+                                    // Skip experiment generation if the routing stack does not support the protocol
+                                    match routing_protocol {
+                                        RoutingProtocol::Rip if routing_stack.rip.is_none() => continue,
+                                        RoutingProtocol::Ospf if routing_stack.ospf.is_none() => continue,
+                                        RoutingProtocol::Bgp if routing_stack.bgp.is_none() => continue,
+                                        RoutingProtocol::Mpls if routing_stack.mpls.is_none() => continue,
+                                        _ => {}
+                                    }
+                                }
+                                else {
+                                    // Skip experiment generation if there is no routing stack and the protocol is no static
+                                    continue;
+                                }
+                            }
+
                             let routing_protocol_dir = create_dir_if_does_not_exist(topology_dir.join(routing_protocol.to_string()))?;
                             let experiment_path = routing_protocol_dir.join("experiment.json");
 
+                            experiment_count += 1;
                             info!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
 
                             if experiment_path.exists() && override_ == false {
@@ -203,6 +213,9 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
             }
         }
     }
+
+    // Experiment count
+    info!(target: TARGET, "Total of {} individual experiment",  experiment_count);
 
     Ok(())
 }

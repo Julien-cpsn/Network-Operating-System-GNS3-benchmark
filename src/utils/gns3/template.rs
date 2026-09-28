@@ -1,4 +1,6 @@
-use tracing::{debug, warn};
+use std::path::PathBuf;
+use std::process::exit;
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 use crate::{GNS3_TEMPLATE_PREFIX, GUEST_IMAGE_PATH};
 use crate::models::gns3::connector::Gns3Connector;
@@ -91,8 +93,26 @@ pub fn generate_and_create_guest_template(gns3: &Gns3Connector, guest_name: &str
     Ok(())
 }
 
-pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &str, node: &Node, image_name: String) -> anyhow::Result<()> {
+pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &str, node: &Node, images_name: &Vec<PathBuf>) -> anyhow::Result<()> {
     let router = node.unwrap_router();
+
+    let mut hda_image = None;
+    let mut hdb_image = None;
+    let mut hdc_image = None;
+    let mut hdd_image = None;
+
+    for (index, image_path) in images_name.iter().enumerate() {
+        match index {
+            0 => hda_image = Some(image_path.file_name().unwrap().to_str().unwrap().to_string()),
+            1 => hdb_image = Some(image_path.file_name().unwrap().to_str().unwrap().to_string()),
+            2 => hdc_image = Some(image_path.file_name().unwrap().to_str().unwrap().to_string()),
+            3 => hdd_image = Some(image_path.file_name().unwrap().to_str().unwrap().to_string()),
+            _ => {
+                error!(target: TARGET, "{router_name}: QEMU supports only max 4 images per appliance");
+                exit(1);
+            }
+        }
+    }
 
     let template = Gns3Template {
         name: template_name(router_name),
@@ -115,14 +135,14 @@ pub fn generate_and_create_router_template(gns3: &Gns3Connector, router_name: &s
             console_type: String::from("telnet"),
             console_auto_start: false,
             create_config_disk: false,
-            hda_disk_image: image_name,
-            hda_disk_interface: String::from("ide"),
-            hdb_disk_image: String::new(),
-            hdb_disk_interface: String::from("none"),
-            hdc_disk_image: String::new(),
-            hdc_disk_interface: String::from("none"),
-            hdd_disk_image: String::new(),
-            hdd_disk_interface: String::from("none"),
+            hda_disk_interface: if hda_image.is_some() { String::from("ide") } else { String::from("none") },
+            hda_disk_image: hda_image.unwrap_or_default(),
+            hdb_disk_interface: if hdb_image.is_some() { String::from("ide") } else { String::from("none") },
+            hdb_disk_image: hdb_image.unwrap_or_default(),
+            hdc_disk_interface: if hdc_image.is_some() { String::from("ide") } else { String::from("none") },
+            hdc_disk_image: hdc_image.unwrap_or_default(),
+            hdd_disk_interface: if hdd_image.is_some() { String::from("ide") } else { String::from("none") },
+            hdd_disk_image: hdd_image.unwrap_or_default(),
             first_port_name: String::new(),
             port_name_format: String::from("Ethernet{0}"),
             port_segment_size: 0,

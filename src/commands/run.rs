@@ -29,7 +29,7 @@ use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::files::routing_stacks::parse_routing_stack_list_file;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::gns3::config::get_gns3_images_path;
-use crate::utils::gns3::image::find_or_upload_image;
+use crate::utils::gns3::image::find_or_upload_images;
 use crate::utils::gns3::node::create_node;
 use crate::utils::gns3::project::{create_project, find_and_delete_projects};
 use crate::utils::gns3::template::{find_and_delete_templates, generate_and_create_guest_template, generate_and_create_router_template};
@@ -78,7 +78,7 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     let routing_stack_list = parse_routing_stack_list_file()?;
     let os_list = parse_os_list_file(network_stack_list.keys().collect(), routing_stack_list.keys().collect())?;
 
-    find_or_upload_image(&gns3, &images_path, &GUEST_IMAGE_PATH.get().unwrap())?;
+    find_or_upload_images(&gns3, &images_path, &vec![GUEST_IMAGE_PATH.get().unwrap().clone()])?;
 
     let nb_experiments = experiments.len();
     for (index, experiment) in experiments.drain(..).enumerate() {
@@ -143,7 +143,7 @@ pub async fn run_experiment(
         debug!(target: TARGET, "Ensuring \"{}\" operating system image ({}) is uploaded", router_name, router.os_name);
 
         let operating_system = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system found for {}", router.os_name))?;
-        find_or_upload_image(&gns3, images_path, &operating_system.image_path)?;
+        find_or_upload_images(&gns3, images_path, &operating_system.images_path)?;
     }
 
     /* SETUP */
@@ -154,7 +154,7 @@ pub async fn run_experiment(
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
-        generate_and_create_router_template(&gns3, &router_name, &node, os.image_name())?;
+        generate_and_create_router_template(&gns3, &router_name, &node, &os.images_path)?;
 
         let gns3_node = create_node(&gns3, &project.project_id, router_name, node.x, node.y)?;
         node.gns3_node = Some(gns3_node);
@@ -218,12 +218,20 @@ pub async fn run_experiment(
         info!(target: TARGET, "Starting router: {}", router_name);
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start()?;
-
+        
         // Login
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
-        let login_commands = router_login_commands(&os);
+        let command_context = CommandContext {
+            router_name,
+            router: &router,
+            os,
+            network_stack: None,
+            routing_stack: None,
+        };
+
+        let login_commands = router_login_commands(&command_context)?;
 
         execute_commands_from_node(
             &experiment.experiment_name,

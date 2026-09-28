@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperatingSystem {
+    #[serde(default)]
+    pub trigger_sequence: Option<Vec<DeserializedOsCommandType>>,
     pub input_ready: String,
-    pub trigger_sequence: Option<String>,
     pub login: Option<String>,
     pub password: Option<String>,
     pub network_stack: String,
@@ -17,7 +18,7 @@ pub struct OperatingSystem {
     pub interfaces_start_at: i16,
     #[serde(default = "gap_between_interfaces")]
     pub gap_between_interfaces: u16,
-    pub image_path: PathBuf,
+    pub images_path: Vec<PathBuf>,
     pub resources_monitor_commands: Option<Vec<DeserializedOsCommandType>>
 }
 
@@ -29,10 +30,6 @@ pub enum InterfacePrefix {
 }
 
 impl OperatingSystem {
-    pub fn image_name(&self) -> String {
-        self.image_path.file_name().unwrap().to_str().unwrap().to_string()
-    }
-
     pub fn interface_prefix(&self, nic_type: &NicType) -> anyhow::Result<String> {
         match &self.interface_prefix {
             InterfacePrefix::Simple(prefix) => Ok(prefix.to_owned()),
