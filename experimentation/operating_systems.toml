@@ -86,7 +86,6 @@ done""",
         { expect = "", control = 'c' }
     ]
 
-
 [DNOS10]
     input_ready = "OS10#"
     login = "admin"
@@ -104,6 +103,38 @@ while true
 do
 free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
 done"""}
+    ]
+
+[FreeBSD]
+    trigger_sequence = [
+        { expect = "DHCPDISCOVER", control = "c" },
+        { expect = "DHCPDISCOVER", control = "c" },
+        { expect = "DHCPDISCOVER", control = "c" },
+        { expect = "DHCPDISCOVER", control = "c" },
+        { expect = "Waiting", control = "c" }
+    ]
+    input_ready = ":~"
+    login = "root"
+    #password = null
+    network_stack = "FreeBSD network stack"
+    #routing_stack = "FRR"
+    interface_prefix = [
+        ["E1000", "em"],
+        ["RTL8139", "re"],
+        ["VirtIO", "vtnet"]
+    ]
+    interfaces_start_at = 0
+    images_path = ["/home/julien/Programmation/vm/FreeBSD/FreeBSD-15.1-RELEASE-amd64-zfs.qcow2"]
+    resources_monitor_commands = [
+        "t=$(sysctl -n hw.physmem);p=$(sysctl -n hw.pagesize);f=$(sysctl -n vm.stats.vm.v_free_count);c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)",
+        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+    while true
+    do
+    awk -v t=$t -v p=$p -v f=$f -v c="$c" -v d="$d" 'BEGIN{split(c,x);split(d,y);for(i=1;i<=5;i++)z+=y[i]-x[i];printf("%d\\t%d\\t%d\\t%.4f\\n",t/1048576,f*p/1048576,(t-f*p)/1048576,100-(y[5]-x[5])*100/z)}'
+    c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)
+    done""",
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
     ]
 
 [MikroTik]

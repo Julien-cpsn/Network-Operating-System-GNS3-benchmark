@@ -26,7 +26,9 @@
     ]
 
 ["FreeBSD network stack"]
-    start = []
+    start = [
+        { send = "sysctl net.inet.ip.forwarding=1", assert_true = [["OS", "FreeBSD"]] }
+    ]
     add_ip_address = [
         "ifconfig {INTERFACE_PREFIX}{INTERFACE} inet {IP_ADDRESS} netmask {MASK}"
     ]
