@@ -26,12 +26,37 @@ pub fn guest_add_route_commands(distant_network: &DistantNetwork) -> Vec<OsComma
     ]
 }
 
-pub fn guest_test_commands(experiment_name: &str, test: &Test, server_ip: Ipv4Addr) -> Vec<OsCommand> {
+pub fn guest_test_batch_start_commands() -> Vec<OsCommand> {
     vec![
         OsCommand::new_text(GUEST_INPUT_READY, "mkdir /mnt/shared", true, false),
         OsCommand::new_text(GUEST_INPUT_READY, "mount -t 9p -o trans=virtio,version=9p2000.L shared_folder /mnt/shared", true, false),
-        OsCommand::new_text(GUEST_INPUT_READY, format!("flent {} -t \"{}\" -l {} -H {}", test.test, experiment_name, test.duration, server_ip), true, false),
-        OsCommand::new_text(GUEST_INPUT_READY, "cp *.flent.gz /mnt/shared", true, false),
+    ]
+}
+
+pub fn guest_test_commands(experiment_name: &str, test: &Test, server_ip: Ipv4Addr) -> Vec<OsCommand> {
+    vec![
+        OsCommand::new_text(GUEST_INPUT_READY, format!("mkdir {}", test.name), true, false),
+        OsCommand::new_text(
+            GUEST_INPUT_READY,
+            format!(
+                "(sleep {} && flent {} -t \"{}\" -l {} -H {} --data-dir {}) &",
+                test.fire_at,
+                test.test,
+                experiment_name,
+                test.duration,
+                server_ip,
+                test.name
+            ),
+            true,
+            false
+        )
+    ]
+}
+
+pub fn guest_test_batch_end_commands() -> Vec<OsCommand> {
+    vec![
+        OsCommand::new_text(GUEST_INPUT_READY, "wait", true, false),
+        OsCommand::new_text(GUEST_INPUT_READY, "cp -r ./ /mnt/shared", true, false),
         OsCommand::new_line(GUEST_INPUT_READY),
     ]
 }

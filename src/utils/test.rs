@@ -2,12 +2,8 @@ use crate::models::test::Test;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::os_commands::execute::execute_commands;
-use crate::utils::os_commands::guest::{guest_test_commands, GUEST_INPUT_READY};
 use std::fs;
-use std::net::Ipv4Addr;
-use std::time::Duration;
 use tracing::{info, warn};
-use tokio::time::sleep;
 use walkdir::{DirEntry, WalkDir};
 use crate::models::os_command::OsCommand;
 
@@ -15,20 +11,11 @@ const TARGET: &str = "test";
 
 pub async fn test_task(
     experiment_name: String,
-    test: Test,
     from_node_name: String,
     console_host: String,
     console: u32,
-    to_node_ip: Ipv4Addr
+    test_commands: Vec<OsCommand>,
 ) -> anyhow::Result<()> {
-    sleep(Duration::from_secs(test.fire_at)).await;
-
-
-    info!(target: TARGET, "Running test: {} (duration: {})", &test.name, &test.duration);
-
-    let mut test_commands = guest_test_commands(&experiment_name, &test, to_node_ip);
-    test_commands.push(OsCommand::new_line(GUEST_INPUT_READY));
-
     execute_commands(
         &experiment_name,
         &from_node_name,
@@ -39,11 +26,14 @@ pub async fn test_task(
         None
     )?;
 
-    let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
+    Ok(())
+}
 
+pub fn harvest_results(experiment_name: &str, test: &Test) -> anyhow::Result<()> {
+    let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
     fs::create_dir_all(&result_path)?;
 
-    let walk_result_files = WalkDir::new(SHARED_DIR_PATH.as_path());
+    let walk_result_files = WalkDir::new(SHARED_DIR_PATH.as_path().join(&test.name));
     let result_files: Vec<DirEntry> = walk_result_files.into_iter().filter_map(|f| f.ok()).collect();
 
     if result_files.is_empty() {
@@ -61,6 +51,22 @@ pub async fn test_task(
             info!(target: TARGET, "Moved to: {}", output_path.display());
 
             fs::rename(file.path(), output_path)?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn clear_shared_dir() -> anyhow::Result<()> {
+    info!(target: TARGET, "Clearing shared directory");
+
+    let shared_dir = SHARED_DIR_PATH.as_path();
+    for entry in fs::read_dir(shared_dir)?.filter_map(Result::ok) {
+        if entry.file_type()?.is_dir() {
+            fs::remove_dir_all(entry.path())?;
+        }
+        else {
+            fs::remove_file(entry.path())?;
         }
     }
 

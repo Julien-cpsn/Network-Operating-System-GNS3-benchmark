@@ -37,14 +37,14 @@ use crate::utils::link::create_link;
 use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger, EXPERIMENT_LOG_FILE_NAME, find_and_delete_experiment_log_file};
 use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
-use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY};
+use crate::utils::os_commands::guest::{guest_add_route_commands, guest_config_commands, GUEST_INPUT_READY, guest_test_commands, guest_test_batch_start_commands, guest_test_batch_end_commands};
 use crate::utils::os_commands::router::{router_add_ip_address_commands, router_login_commands, router_start_network_stack_commands, router_start_routing_stack_commands, router_stop_network_stack_commands, router_stop_routing_stack_commands};
 use crate::utils::os_commands::routing::bpg_config::router_configure_bgp_commands;
 use crate::utils::os_commands::routing::ospf_config::router_configure_ospf_commands;
 use crate::utils::os_commands::routing::rip_config::router_configure_rip_commands;
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
 use crate::utils::route::generate_distant_network_from_test;
-use crate::utils::test::test_task;
+use crate::utils::test::{clear_shared_dir, harvest_results, test_task};
 use crate::utils::utils::{filter_guests_mut, filter_routers_mut};
 
 pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
@@ -179,6 +179,10 @@ pub async fn run_experiment(
         let from_node = experiment.network.nodes.get(&test.from).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", test.from, &test.name))?;
         let from_node_network = from_node.unwrap_guest().ip.network();
 
+        if matches!(from_node.node_type, NodeType::Router(..)) || matches!(to_node.node_type, NodeType::Router(..)) {
+            return Err(anyhow!("Cannot test from/to router nodes, only guests"))
+        }
+        
         generate_distant_network_from_test(&test.from, experiment.network.nodes.get_mut(&test.from).unwrap(), to_node_network, from_node_network)?;
         generate_distant_network_from_test(&test.to, experiment.network.nodes.get_mut(&test.to).unwrap(), from_node_network, to_node_network)?;
     }
@@ -385,29 +389,39 @@ pub async fn run_experiment(
 
         let mut test_threads = JoinSet::new();
 
-        for test in experiment.test_batch {
-            let (from_node_name, from_node) = experiment.network.nodes.get_key_value(&test.from).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", test.from, &test.name))?;
-            let to_node = experiment.network.nodes.get(&test.to).ok_or_else(|| anyhow!("Node \"{}\" not found in test {}", &test.to, &test.name))?;
+        for (from, tests) in experiment.test_batch_by_node() {
+            let (from_node_name, from_node) = experiment.network.nodes.get_key_value(&from).unwrap();
+            let from_gns3_node = from_node.gns3_node.as_ref().unwrap();
 
-            if matches!(from_node.node_type, NodeType::Router(..)) || matches!(to_node.node_type, NodeType::Router(..)) {
-                return Err(anyhow!("Cannot test from/to router nodes, only guests"))
+            let mut test_batch_commands = guest_test_batch_start_commands();
+            
+            for test in tests {
+                info!(target: TARGET, "Running test in {} seconds : {} (duration: {} seconds)", &test.name, &test.fire_at, &test.duration);
+
+                let to_node = experiment.network.nodes.get(&test.to).unwrap();
+                let to_node_ip = to_node.unwrap_guest().ip.address();
+                let test_commands = guest_test_commands(&experiment.experiment_name, &test, to_node_ip);
+                
+                test_batch_commands.extend(test_commands);
             }
-
-            let gns3_node = from_node.gns3_node.as_ref().unwrap();
-            let to_node_ip = to_node.unwrap_guest().ip.address();
-
+            
+            test_batch_commands.extend(guest_test_batch_end_commands());
+            
             test_threads.spawn(test_task(
                 experiment.experiment_name.clone(),
-                test.clone(),
                 from_node_name.to_owned(),
-                gns3_node.console_host(),
-                gns3_node.console(),
-                to_node_ip
+                from_gns3_node.console_host(),
+                from_gns3_node.console(),
+                test_batch_commands
             ));
         }
 
         test_threads.join_all().await;
 
+        for test in &experiment.test_batch {
+            harvest_results(&experiment.experiment_name, &test)?;
+        }
+        
         info!(target: TARGET, "Experiment end");
     }
 
@@ -420,6 +434,8 @@ pub async fn run_experiment(
 
     /* STOP */
 
+    clear_shared_dir()?;
+    
     if !run_command.run_command.no_stop {
         for (node_name, node) in &experiment.network.nodes {
             debug!(target: TARGET, "Stoping node: {}", node_name);
