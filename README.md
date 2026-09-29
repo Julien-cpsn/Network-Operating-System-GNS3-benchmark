@@ -27,7 +27,7 @@ uv sync
 ### 2. Create custom Debian guest
 
 > [!NOTE]
-> This is guest is needed for running flent ([iperf3](https://github.com/esnet/iperf), [netperf](https://github.com/HewlettPackard/netperf), [fping](https://fping.org/), [irtt](https://github.com/heistp/irtt)) experiments through the network.
+> This is guest is needed for running [flent](https://flent.org/) ([iperf3](https://github.com/esnet/iperf), [netperf](https://github.com/HewlettPackard/netperf), [fping](https://fping.org/), [irtt](https://github.com/heistp/irtt)) and [xfr](https://github.com/lance0/xfr) experiments through the network.
 
 ```shell
 virt-builder debian-13 \
@@ -36,8 +36,12 @@ virt-builder debian-13 \
   --size 6G \
   --root-password password:debian \
   --upload sources.list:/etc/apt/sources.list \
-  --install "netperf,iperf3,fping,irtt,htop,net-tools,flent"
+  --install "curl,netperf,iperf3,fping,irtt,htop,net-tools,flent" \
+  --run-command "curl -LO https://github.com/lance0/xfr/releases/latest/download/xfr-x86_64-unknown-linux-musl.tar.gz" \
+  --run-command "tar xzf xfr-*.tar.gz && mv xfr /usr/local/bin/"
 ```
+
+Then fill the `.env` file. You can use the `.env.example` as a starter
 
 ### 3. Create an experiments
 
