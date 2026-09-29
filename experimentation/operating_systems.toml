@@ -75,7 +75,7 @@ done""",
     #routing_stack = null
     interface_prefix = "ens"
     interfaces_start_at = 3
-    images_path = ["/home/julien/Programmation/vm/Debian/tmp/debian-bookworm.qcow2"]
+    images_path = ["/home/julien/Programmation/vm/Debian/debian-trixie.qcow2"]
     resources_monitor_commands = [
         """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
 while true
