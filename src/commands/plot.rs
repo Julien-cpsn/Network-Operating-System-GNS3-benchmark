@@ -12,9 +12,10 @@ use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
 const TARGET: &str = "plot";
 
-const PLOTS: [(&str, &str, u32); 2] = [
-    ("box_totals", "Box plot of totals", 0),
-    ("icmp_cdf", "ICMP CDF", 15)
+const PLOTS: [(&str, &str, u32, &str); 3] = [
+    ("box_totals", "Box plot of totals", 0, ""),
+    ("icmp_cdf", "ICMP CDF", 15, ""),
+    ("ellipsis", "Ellipsis", 0, "--bounds-x=1000,0 --bounds-y=500,0")
 ];
 
 const EXTENSION: [&str; 2] = ["png", "svg"];
@@ -85,7 +86,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
         flent_additional_args.push("--no-title");
     }
 
-    for (plot_type, plot, adjustment) in PLOTS {
+    for (plot_type, plot, adjustment, additional_arg) in PLOTS {
         let flent_notes = adjust_note(&notes, adjustment);
 
         for extension in EXTENSION {
@@ -104,7 +105,8 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
                     "--no-annotation",
                     "--no-markers",
                     "--no-hover-highlight",
-                    "--fallback-layout"
+                    "--fallback-layout",
+                    "--figure-dpi", "150"
                 ],
                 flent_input_files_args.clone(),
                 flent_legends_to_remove.clone(),
@@ -113,7 +115,8 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
                 vec![
                     "--figure-note",
                     &flent_notes
-                ]
+                ],
+                additional_arg.split(" ").collect()
             ]
                 .concat();
 

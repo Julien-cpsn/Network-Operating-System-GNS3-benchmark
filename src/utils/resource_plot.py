@@ -67,7 +67,7 @@ def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
     return elapsed, used_mem, cpu_usage
 
 def main(output_path: str, inputs: list[str]):
-    fig, ax1 = plt.subplots(figsize=(7, 4))
+    fig, ax1 = plt.subplots(figsize=(7, 4), dpi=150)
     ax2 = ax1.twinx()
 
     mem_lines = []
