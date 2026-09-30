@@ -234,17 +234,17 @@ fn get_oses_to_use(command_os: &Option<String>, mut os_list: IndexMap<String, Op
     os_list
 }
 
-fn get_test_batches_to_use(command_test: &Option<String>, mut test_list: IndexMap<String, Vec<Test>>) -> IndexMap<String, Vec<Test>> {
+fn get_test_batches_to_use(command_test: &Option<String>, mut test_batch_list: IndexMap<String, Vec<Test>>) -> IndexMap<String, Vec<Test>> {
    if let Some(test) = &command_test {
-       if !test_list.contains_key(test) {
+       if !test_batch_list.contains_key(test) {
            error!(target: TARGET, "{} was not found in \"{}\"", test, TEST_BATCH_LIST_PATH.display());
            exit(1);
        }
 
-       test_list.retain(|t, _| t == test);
+       test_batch_list.retain(|t, _| t == test);
    }
 
-    test_list
+    test_batch_list
 }
 
 fn get_topologies_to_use(command_topology: &Option<String>, topology_list: IndexMap<String, Topology>, command_routing_protocol: &Option<RoutingProtocol>) -> IndexMap<String, Topology> {

@@ -32,27 +32,27 @@ pub fn parse_experiments_files(experiment_selection: &ExperimentSelectionArgs) -
 
         // Exclude not selected experiment
         
-        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.contains(topology_name){
+        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.contains(&format!("{topology_name},")){
             continue;
         }
 
-        if let Some(os) = &experiment_selection.os && !experiment.experiment_name.contains(os){
+        if let Some(os) = &experiment_selection.os && !experiment.experiment_name.contains(&format!(",{os},")){
             continue;
         }
 
-        if let Some(test_batch) = &experiment_selection.test_batch && !experiment.experiment_name.contains(test_batch){
+        if let Some(test_batch) = &experiment_selection.test_batch && !experiment.experiment_name.contains(&format!(",{test_batch},")) {
             continue;
         }
 
-        if let Some(resources) = &experiment_selection.resources && !experiment.experiment_name.contains(resources.to_string().as_str()){
+        if let Some(resources) = &experiment_selection.resources && !experiment.experiment_name.contains(&format!(",{resources},")){
             continue;
         }
 
-        if let Some(nic) = &experiment_selection.nic && !experiment.experiment_name.contains(nic.to_string().as_str()){
+        if let Some(nic) = &experiment_selection.nic && !experiment.experiment_name.contains(&format!(",{nic},")){
             continue;
         }
 
-        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.contains(protocol.to_string().as_str()){
+        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.contains(&format!(",{protocol}")){
             continue;
         }
         
