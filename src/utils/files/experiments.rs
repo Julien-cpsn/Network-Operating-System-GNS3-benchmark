@@ -32,7 +32,7 @@ pub fn parse_experiments_files(experiment_selection: &ExperimentSelectionArgs) -
 
         // Exclude not selected experiment
         
-        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.contains(&format!("{topology_name},")){
+        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.starts_with(&format!("{topology_name},")){
             continue;
         }
 
@@ -52,7 +52,7 @@ pub fn parse_experiments_files(experiment_selection: &ExperimentSelectionArgs) -
             continue;
         }
 
-        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.contains(&format!(",{protocol}")){
+        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.ends_with(&format!(",{protocol}")){
             continue;
         }
         
