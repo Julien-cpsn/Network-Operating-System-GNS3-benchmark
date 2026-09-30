@@ -2,6 +2,6 @@
     { name = "RRUL", test = "rrul", fire_at = 0, duration = 60, from = "Client", to = "Server" }
 ]
 
-"VoIP at start" = [
-    { name = "VoIP", test = "voip", fire_at = 0, duration = 60, from = "Client", to = "Server" },
+"VoIP and RRUL at start" = [
+    { name = "VoIP & RRUL", test = "voip-rrul", fire_at = 0, duration = 60, from = "Client", to = "Server" },
 ]

@@ -12,4 +12,13 @@ impl Gns3Link {
             Ok(())
         })
     }
+
+    pub fn delete(&self) -> anyhow::Result<()> {
+        Python::attach(|py| {
+            let gns3_link = self.0.bind(py);
+            gns3_link.call_method0("delete")?;
+
+            Ok(())
+        })
+    }
 }

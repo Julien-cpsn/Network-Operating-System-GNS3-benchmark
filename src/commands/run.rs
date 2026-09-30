@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use anyhow::anyhow;
 use indexmap::IndexMap;
 use tracing::{debug, error, info, warn};
@@ -14,6 +14,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use crate::args::run::RunCommand;
 use crate::GUEST_IMAGE_PATH;
 use crate::models::experiment::Experiment;
+use crate::models::failure_event::FailureEvent;
 use crate::models::gns3::connector::Gns3Connector;
 use crate::models::network_stack::NetworkStack;
 use crate::models::nodes::node::{NodeType};
@@ -33,7 +34,7 @@ use crate::utils::gns3::image::find_or_upload_images;
 use crate::utils::gns3::node::create_node;
 use crate::utils::gns3::project::{create_project, find_and_delete_projects};
 use crate::utils::gns3::template::{find_and_delete_templates, generate_and_create_guest_template, generate_and_create_router_template};
-use crate::utils::link::create_link;
+use crate::utils::link::{create_link, link_failure};
 use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger, EXPERIMENT_LOG_FILE_NAME, find_and_delete_experiment_log_file};
 use crate::utils::monitor::monitor_task;
 use crate::utils::os_commands::execute::{execute_commands_from_node};
@@ -130,6 +131,8 @@ pub async fn run_experiment(
 
     /* INITIALIZATION */
 
+    let experiment_start = Instant::now();
+
     find_and_delete_projects(&gns3)?;
     find_and_delete_templates(&gns3)?;
     find_and_delete_log_files(&experiment.experiment_name, &experiment.network.nodes)?;
@@ -165,11 +168,15 @@ pub async fn run_experiment(
         node.gns3_node = Some(gns3_node);
     }
 
-    for (index, link) in experiment.network.physical_links.iter().enumerate() {
+    let mut links = Vec::new();
+
+    for (index, link) in experiment.network.physical_links.drain(..).enumerate() {
         let (node_a_name, node_a) = experiment.network.nodes.get_key_value(&link.node_a).ok_or_else(|| anyhow!("Node a \"{}\" not found in link {}", &link.node_a, index))?;
         let (node_b_name, node_b) = experiment.network.nodes.get_key_value(&link.node_b).ok_or_else(|| anyhow!("Node b \"{}\" not found in link {}", &link.node_b, index))?;
 
-        create_link(&gns3, &project.project_id, node_a_name, node_b_name, node_a, node_b, link.adapter_a, link.adapter_b)?;
+        let gns3_link = create_link(&gns3, &project.project_id, node_a_name, node_b_name, node_a, node_b, link.adapter_a, link.adapter_b)?;
+
+        links.push((link, gns3_link));
     }
 
     for test in &experiment.test_batch {
@@ -206,6 +213,7 @@ pub async fn run_experiment(
             config_commands.extend(add_route_command);
         }
 
+        config_commands.push(OsCommand::new_text(GUEST_INPUT_READY, "netserver", true, false));
         config_commands.push(OsCommand::new_line(GUEST_INPUT_READY));
 
         execute_commands_from_node(
@@ -382,6 +390,20 @@ pub async fn run_experiment(
         sleep(Duration::from_secs(60)).await;
     }
 
+    /* FAILURE EVENTS */
+
+    let mut failure_events_threads = JoinSet::new();
+
+    for failure_event in &experiment.network.failure_events {
+        match failure_event {
+            FailureEvent::Link { link_index, happens_at } => {
+                let (link, gns3_link) = links.remove(*link_index);
+
+                failure_events_threads.spawn(link_failure(link, gns3_link, *happens_at));
+            }
+        }
+    }
+
     /* RUN */
 
     if !run_command.run_command.no_test {
@@ -405,7 +427,7 @@ pub async fn run_experiment(
                 test_batch_commands.extend(test_commands);
             }
             
-            test_batch_commands.extend(guest_test_batch_end_commands());
+            test_batch_commands.extend(guest_test_batch_end_commands(&experiment.test_batch));
             
             test_threads.spawn(test_task(
                 experiment.experiment_name.clone(),
@@ -418,10 +440,6 @@ pub async fn run_experiment(
 
         test_threads.join_all().await;
 
-        for test in &experiment.test_batch {
-            harvest_results(&experiment.experiment_name, &test)?;
-        }
-        
         info!(target: TARGET, "Experiment end");
     }
 
@@ -431,6 +449,10 @@ pub async fn run_experiment(
 
     stop_monitoring.store(true, Ordering::Relaxed);
     monitor_threads.join_all().await;
+
+    for test in &experiment.test_batch {
+        harvest_results(&experiment.experiment_name, &test)?;
+    }
 
     /* STOP */
 
@@ -445,7 +467,10 @@ pub async fn run_experiment(
 
     /* END */
 
+    let experiment_duration = experiment_start.elapsed();
+
     info!(target: TARGET, "Experiment finished");
+    info!(target: TARGET, "Duration: {:?}", experiment_duration);
     info!(target: TARGET, "");
 
     if run_command.run_command.first_only {

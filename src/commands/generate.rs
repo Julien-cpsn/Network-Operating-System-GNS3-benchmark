@@ -193,7 +193,8 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                 experiment_name: format!("{topology_name},{os_name},{test_batch_name},{resources},{nic},{routing_protocol}"),
                                 network: Network {
                                     nodes,
-                                    physical_links: topology.network.physical_links.clone()
+                                    physical_links: topology.network.physical_links.clone(),
+                                    failure_events: topology.failure_events.clone(),
                                 },
                                 test_batch: test_batch.clone(),
                             };

@@ -1,5 +1,6 @@
 [Simple]
     supported_routing_protocols = ["static", "RIP", "OSPF"]
+    failure_events = []
 
     [Simple.network]
     physical_links = [
@@ -52,6 +53,9 @@
 
 [Double]
     supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
+    failure_events = [
+        #{ type = "link", link_index = 1, happens_at = 30 }
+    ]
 
     [Double.network]
     physical_links = [

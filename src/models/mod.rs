@@ -13,3 +13,4 @@ pub mod network_stack;
 pub mod topology;
 pub mod os_command;
 pub mod routing_stack;
+pub mod failure_event;

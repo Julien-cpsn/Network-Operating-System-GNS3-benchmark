@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command};
@@ -10,22 +11,56 @@ use crate::utils::files::plot_dir::PLOT_DIR_PATH;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
+
 const TARGET: &str = "plot";
-
-const PLOTS: [(&str, &str, u32, &str); 3] = [
-    ("box_totals", "Box plot of totals", 0, ""),
-    ("icmp_cdf", "ICMP CDF", 15, ""),
-    ("ellipsis", "Ellipsis", 0, "--bounds-x=1000,0 --bounds-y=500,0")
-];
-
-const EXTENSION: [&str; 2] = ["png", "svg"];
 
 #[derive(Debug)]
 struct ExperimentAndResults {
     pub experiment: Experiment,
     pub experiment_keywords: Vec<String>,
-    pub result_paths: Vec<PathBuf>,
+    pub result_paths_per_test: HashMap<String, Vec<PathBuf>>,
 }
+
+struct Plot {
+    pub plot_type: &'static str,
+    pub plot_name: &'static str,
+    pub support_tests: &'static [&'static str],
+    pub adjustment: i32,
+    pub additional_args: &'static [&'static str]
+}
+
+const PLOTS: [Plot; 4] = [
+    Plot {
+        plot_type: "box_totals",
+        plot_name: "Box plot of totals",
+        support_tests: &["rrul", "voip-rrul"],
+        adjustment: 0,
+        additional_args: &[],
+    },
+    Plot {
+        plot_type: "icmp_cdf",
+        plot_name: "ICMP CDF",
+        support_tests: &["rrul", "voip-rrul"],
+        adjustment: 6,
+        additional_args: &[]
+    },
+    Plot {
+        plot_type: "voip_induced_delay_box",
+        plot_name: "VoIP induced delay box plot",
+        support_tests: &["voip", "voip-rrul"],
+        adjustment: 10,
+        additional_args: &[],
+    },
+    Plot {
+        plot_type: "ellipsis",
+        plot_name: "Ellipsis",
+        support_tests: &["rrul", "voip-rrul"],
+        adjustment: 0,
+        additional_args: &["--bounds-x=1000,0", "--bounds-y=500,0"]
+    },
+];
+
+const EXTENSION: [&str; 2] = ["png", "svg"];
 
 pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
     let experiment_results = extract_experiments_and_results(&plot_command.experiment_selection)?;
@@ -53,7 +88,6 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
         true => Vec::new(),
     };
 
-    let mut flent_input_files_args = Vec::new();
     let mut flent_additional_args = Vec::new();
 
     let flent_legends_to_remove: Vec<String> = common_words
@@ -70,13 +104,6 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
         .collect();
     let flent_legends_to_modify: Vec<&str> = flent_legends_to_modify.iter().map(|s| s.as_str()).collect();
 
-    for experiment in experiment_results {
-        for result_path in &experiment.result_paths {
-            flent_input_files_args.push("-i");
-            flent_input_files_args.push(result_path.to_str().unwrap());
-        }
-    }
-
     if plot_command.plot_command.log_scale {
         flent_additional_args.push("--log-scale-y");
         flent_additional_args.push("log10");
@@ -86,16 +113,35 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
         flent_additional_args.push("--no-title");
     }
 
-    for (plot_type, plot, adjustment, additional_arg) in PLOTS {
-        let flent_notes = adjust_note(&notes, adjustment);
+    for plot in PLOTS {
+        let mut flent_input_files_args = Vec::new();
+
+        for experiment in experiment_results {
+            for (test, result_paths) in &experiment.result_paths_per_test {
+                if !plot.support_tests.contains(&test.as_str()) {
+                    continue;
+                }
+
+                for result_path in result_paths {
+                    if !result_path.file_name().unwrap().to_str().unwrap().starts_with(test) {
+                        continue;
+                    }
+
+                    flent_input_files_args.push("-i");
+                    flent_input_files_args.push(result_path.to_str().unwrap());
+                }
+            }
+        }
+
+        let flent_notes = adjust_note(&notes, plot.adjustment);
 
         for extension in EXTENSION {
-            let plot_path = plot_output_directory_path.join(format!("{plot}.{extension}"));
+            let plot_path = plot_output_directory_path.join(format!("{}.{}", plot.plot_name, extension));
 
             let flent_args = [
                 vec![
                     "-o", plot_path.to_str().unwrap(),
-                    "-p", plot_type,
+                    "-p", plot.plot_type,
                     "--skip-missing-series",
                     "--filter-regexp", ",",
                     "--filter-regexp", "_",
@@ -116,7 +162,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
                     "--figure-note",
                     &flent_notes
                 ],
-                additional_arg.split(" ").collect()
+                plot.additional_args.to_vec()
             ]
                 .concat();
 
@@ -183,7 +229,7 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
     let mut experiment_results: Vec<ExperimentAndResults> = Vec::new();
 
     for experiment in experiments {
-        let mut result_paths = Vec::new();
+        let mut result_paths = HashMap::new();
 
         for test in &experiment.test_batch {
             let result_dir_path = RESULT_DIR_PATH.join(&experiment.experiment_name).join(&test.name);
@@ -201,7 +247,8 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
                 }
 
                 if let Some(extension) = file_path.path().to_str() && extension.ends_with(".flent.gz") {
-                    result_paths.push(file_path.path());
+                    let entry = result_paths.entry(test.test.clone()).or_insert(Vec::new());
+                    entry.push(file_path.path())
                 }
             }
         }
@@ -215,7 +262,7 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
         let experiment_and_results = ExperimentAndResults {
             experiment,
             experiment_keywords,
-            result_paths,
+            result_paths_per_test: result_paths,
         };
 
         experiment_results.push(experiment_and_results);
@@ -226,30 +273,26 @@ fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArg
     Ok(experiment_results)
 }
 
-fn adjust_note(notes: &Vec<&str>, adjustment: u32) -> String {
-    let mut lines = Vec::new();
+fn adjust_note(notes: &[&str], adjustment: i32) -> String {
+    const DEFAULT_PADDING: i32 = 190;
 
-    for (index, note) in notes.iter().enumerate() {
-        let mut spaces_count = 196 - adjustment as usize - lines.len() - note.len() + (count_capital_letters(&note) / 2);
+    notes
+        .iter()
+        .enumerate()
+        .map(|(index, note)| {
+            let width = note.chars().count() as i32;
 
-        if index == 0 {
-            spaces_count -= 1;
-        }
+            let mut padding = DEFAULT_PADDING
+                - adjustment
+                - width / 2
+                - index as i32;
 
-        lines.push(format!("{}{}\n", " ".repeat(spaces_count), note));
-    }
+            if index == 0 {
+                padding -= 1;
+            }
 
-    lines.join("")
-}
 
-fn count_capital_letters(string: &str) -> usize {
-    let mut count = 0;
-
-    for c in string.chars() {
-        if c.is_uppercase() {
-            count += 1;
-        }
-    }
-
-    count
+            format!("{}{}\n", " ".repeat(padding.max(0) as usize), note)
+        })
+        .collect()
 }

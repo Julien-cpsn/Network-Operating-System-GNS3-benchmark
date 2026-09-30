@@ -3,7 +3,7 @@ use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::os_commands::execute::execute_commands;
 use std::fs;
-use tracing::{info, warn};
+use tracing::{error, info};
 use walkdir::{DirEntry, WalkDir};
 use crate::models::os_command::OsCommand;
 
@@ -30,21 +30,23 @@ pub async fn test_task(
 }
 
 pub fn harvest_results(experiment_name: &str, test: &Test) -> anyhow::Result<()> {
+    info!(target: TARGET, "Harvesting results...");
+
     let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
     fs::create_dir_all(&result_path)?;
 
     let walk_result_files = WalkDir::new(SHARED_DIR_PATH.as_path().join(&test.name));
-    let result_files: Vec<DirEntry> = walk_result_files.into_iter().filter_map(|f| f.ok()).collect();
+    let result_files: Vec<DirEntry> = walk_result_files
+        .into_iter()
+        .filter_map(|f| f.ok())
+        .filter(|f| f.file_type().is_file())
+        .collect();
 
     if result_files.is_empty() {
-        warn!(target: TARGET, "No test result files found");
+        error!(target: TARGET, "No test result files found");
     }
     else {
         for file in result_files {
-            if file.file_type().is_dir() {
-                continue;
-            }
-
             let output_path = result_path.join(file.file_name());
 
             info!(target: TARGET, "Retrieved experiment result file: {}", file.file_name().display());

@@ -135,12 +135,12 @@ def main(output_path: str, inputs: list[str]):
         legend_labels,
         handler_map={tuple: HandlerTuple(ndivide=None)},
         loc="center left",
-        bbox_to_anchor=(1.025 + max_label * 0.005, 0.85),
+        bbox_to_anchor=(1.17, 0.85 - len(legend_labels) * 0.02, 0.0, 0.0),
         borderaxespad=0,
         frameon=False
     )
 
-    plt.tight_layout(rect=(0, 0, 1.05, 1))
+    plt.tight_layout(rect=(0, 0, 1.0 + 0.0035 * max_label, 1))
     plt.savefig(Path(output_path).with_suffix('.svg'))
     plt.savefig(Path(output_path).with_suffix('.png'))
 
