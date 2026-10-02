@@ -25,6 +25,18 @@
         { expect = "Password:", send = "linuxadmin" },
     ]
 
+["EXOS network stack"]
+    start = []
+    add_ip_address = [
+        "create vlan vlan{INTERFACE} tag {INTERFACE}",
+        "configure vlan vlan{INTERFACE} add port {INTERFACE}",
+        "configure vlan vlan{INTERFACE} ipaddress {IP_ADDRESS}/{NETWORK_LENGTH}",
+        "enable ipforwarding vlan vlan{INTERFACE}",
+        "enable port {INTERFACE}",
+    ]
+    add_static_route = []
+    stop = []
+
 ["FreeBSD network stack"]
     start = [
         { send = "sysctl net.inet.ip.forwarding=1", assert_true = [["OS", "FreeBSD"]] }

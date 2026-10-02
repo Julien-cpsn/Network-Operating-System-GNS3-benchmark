@@ -101,7 +101,7 @@ EOF"""
         "birdc configure"
     ]
 
-["DNOS10 Routing Stack"]
+["DNOS10 routing stack"]
     start = []
     OSPF = {
         start = [
@@ -145,6 +145,59 @@ EOF"""
         ]
     }
     stop = []
+
+["EXOS routing stack"]
+    start = []
+    RIP = {
+        start = [
+            "enable rip"
+        ],
+        enable_interface = [
+            "configure rip add vlan{INTERFACE}"
+        ],
+        add_network = [],
+        stop = []
+    }
+    OSPF = {
+        start = [
+            "configure ospf routerid {ROUTER_ID}",
+            "enable ospf"
+        ],
+        add_area = [
+            "configure ospf add vlan vlan{INTERFACE} area {AREA}.{AREA}.{AREA}.{AREA}"
+        ],
+        add_network = [],
+        stop = []
+    }
+    BGP = {
+        start = [
+            "configure bgp AS-number {LOCAL_AS}",
+            "configure bgp routerid {ROUTER_ID}",
+            "enable bgp",
+            "edit policy permit-all.pol",
+            { expect = "", send = "i" },
+            { expect = "", send = """entry all_routes {
+    if {
+    } then {
+        permit;
+    }
+}""" },
+            { expect = "", control = "c" },
+            { expect = "", send = ":wq" },
+        ],
+        add_neighbor = [
+            "create bgp neighbor {NEIGHBOR_ADDRESS} remote-AS-number {REMOTE_AS}",
+            "enable bgp neighbor {NEIGHBOR_ADDRESS}",
+            "configure bgp neighbor {NEIGHBOR_ADDRESS} route-policy in permit-all",
+            "configure bgp neighbor {NEIGHBOR_ADDRESS} route-policy out permit-all",
+        ],
+        add_network_to_advertise = [
+            "configure bgp add network {DISTANT_NETWORK}"
+        ],
+        stop = []
+    }
+    stop = []
+
 
 ["FRR"]
     start = [

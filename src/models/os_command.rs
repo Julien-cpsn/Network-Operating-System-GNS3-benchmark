@@ -55,9 +55,9 @@ impl OsCommand {
 impl Display for SendType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
+            SendType::NewLine => String::new(),
             SendType::Text(text, _) => text.to_owned(),
             SendType::Ctrl(char) => format!("Ctrl-{}", char),
-            SendType::NewLine => String::new(),
             SendType::Wait(time) => format!("Wait {} ms", time),
         };
         write!(f, "{}", str)

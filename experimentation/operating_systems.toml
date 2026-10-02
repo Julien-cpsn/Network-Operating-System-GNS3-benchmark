@@ -91,7 +91,7 @@ done""",
     login = "admin"
     password = "admin"
     network_stack = "DNOS10 network stack"
-    routing_stack = "DNOS10 Routing Stack"
+    routing_stack = "DNOS10 routing stack"
     interface_prefix = "1/1/"
     interfaces_start_at = 0
     images_path = [
@@ -104,6 +104,57 @@ do
 free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
 done"""}
     ]
+
+[EXOS]
+    trigger_sequence = [
+        { expect = "Authentication Service (AAA) on the master node is now available for login.", send = "" },
+        { expect = "login:", send = "admin" },
+        { expect = "password:", send = "" },
+        { expect = "configure a static IP address, default gateway and DNS server now?", send = "n" },
+        { expect = "Would you like to disable MSTP?", send = "y" },
+        { expect = "The switch offers an enhanced security mode", send = "n" },
+        { expect = "Would you like to disable Telnet?", send = "y" },
+        { expect = "Would you like to enable SNMPv1/v2c?", send = "n" },
+        { expect = "Would you like to enable SNMPv3?", send = "n" },
+        { expect = "Would you like unconfigured ports to be turned off by default?", send = "y" },
+        { expect = "Would you like to configure the failsafe username and password now?", send = "n" },
+        { expect = "Do you want to see the list of CLI commands executed by this provisioning", send = "n" },
+        { expect = "Do you want to see some basic CLI commands before entering the CLI?", send = "n" },
+    ]
+    input_ready = "* EXOS-VM"
+    #login = "admin"
+    #password = ""
+    network_stack = "EXOS network stack"
+    routing_stack = "EXOS routing stack"
+    interface_prefix = ""
+    interfaces_start_at = 0
+    images_path = ["/home/julien/Programmation/vm/EXOS/EXOS-VM_33.6.1.14.qcow2"]
+    resources_monitor_commands = [
+        "edit script bash.py",
+        { expect = "", send = "i"},
+        { expect = "", send = """import os
+
+if __name__ == "__main__":
+    os.system("/bin/bash")
+    exit(0)""" },
+        { expect = "", control = "c" },
+        { expect = "", send = ":wq" },
+        "run script bash.py",
+        { expect = " $", send = """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+while true
+do
+    set -- $(free -m | grep '^Mem:')
+    printf "%s\\t%s\\t%s\\t" "$(( $2 / 1024 ))" "$(( $7 / 1024 ))" "$(( $3 / 1024 ))"
+
+    set -- $(grep '^cpu ' /proc/stat)
+    printf "%s\\n" "$((($2 + $4) * 100 / ($2 + $4 + $5)))"
+
+    sleep 1
+done""" },
+        { expect = "", wait = 60_000_000 },
+        { expect = "", control = 'c' }
+    ]
+
 
 [FreeBSD]
     trigger_sequence = [
