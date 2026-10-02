@@ -29,7 +29,7 @@ pub fn parse_test_batch_list_file() -> anyhow::Result<IndexMap<String, Vec<Test>
         for (key, test_batch) in &test_batch_list {
             debug!(target: TARGET, "\t- {}", key);
             for test in test_batch {
-                debug!(target: TARGET, "\t- {} (test: {}, fire at: {}, duration: {})", test.name, test.test, test.fire_at, test.duration);
+                debug!(target: TARGET, "\t\t- {} (test: {}, fire at: {}, duration: {})", test.name, test.test, test.fire_at, test.duration);
             }
         }
     }

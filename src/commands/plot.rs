@@ -32,28 +32,28 @@ struct Plot {
 const PLOTS: [Plot; 4] = [
     Plot {
         plot_type: "box_totals",
-        plot_name: "Box plot of totals",
+        plot_name: "box_plot_of_totals",
         support_tests: &["rrul", "voip-rrul"],
         adjustment: 0,
         additional_args: &[],
     },
     Plot {
         plot_type: "icmp_cdf",
-        plot_name: "ICMP CDF",
+        plot_name: "icmp_cdf",
         support_tests: &["rrul", "voip-rrul"],
         adjustment: 6,
         additional_args: &[]
     },
     Plot {
         plot_type: "voip_induced_delay_box",
-        plot_name: "VoIP induced delay box plot",
+        plot_name: "voip_induced_delay_box_plot",
         support_tests: &["voip", "voip-rrul"],
         adjustment: 10,
         additional_args: &[],
     },
     Plot {
         plot_type: "ellipsis",
-        plot_name: "Ellipsis",
+        plot_name: "throughput_latency_ellipse",
         support_tests: &["rrul", "voip-rrul"],
         adjustment: 0,
         additional_args: &["--bounds-x=1000,0", "--bounds-y=500,0"]

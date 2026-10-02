@@ -84,9 +84,11 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     let nb_experiments = experiments.len();
     for (index, experiment) in experiments.drain(..).enumerate() {
         let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
-        if !experiment_path.exists() {
-            fs::create_dir(&experiment_path)?;
+        if experiment_path.exists() {
+           fs::remove_dir_all(&experiment_path)?;
         }
+
+        fs::create_dir(&experiment_path)?;
 
         find_and_delete_experiment_log_file(&experiment.experiment_name)?;
 

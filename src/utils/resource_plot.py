@@ -7,6 +7,9 @@ from matplotlib.legend_handler import HandlerTuple
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from matplotlib.patches import Ellipse
+
+
 def extract_experiment_time(path: str) -> tuple[datetime, datetime]:
     parent_folder = Path(path).parent
     experiment_log_file_path = f'{parent_folder}/experiment.log'
@@ -70,6 +73,10 @@ def main(output_path: str, inputs: list[str]):
     fig, ax1 = plt.subplots(figsize=(7, 4), dpi=150)
     ax2 = ax1.twinx()
 
+    ellipse_fig, ellipse_ax = plt.subplots(figsize=(6, 5), dpi=150)
+    all_cpu_values = []
+
+
     mem_lines = []
     cpu_lines = []
 
@@ -103,6 +110,43 @@ def main(output_path: str, inputs: list[str]):
         mem_lines.append(mem_line)
         cpu_lines.append(cpu_line)
 
+        # --------------------------------------------------------------
+        # CPU / memory ellipse
+        # --------------------------------------------------------------
+        cpu_min = min(cpu_usage)
+        cpu_max = max(cpu_usage)
+        mem_min = min(used_memory)
+        mem_max = max(used_memory)
+
+        cpu_center = (cpu_min + cpu_max) / 2
+        mem_center = (mem_min + mem_max) / 2
+
+        cpu_range = cpu_max - cpu_min
+        mem_range = mem_max - mem_min
+
+        all_cpu_values.extend(cpu_usage)
+
+        ellipse = Ellipse(
+            xy=(cpu_center, mem_center),
+            width=cpu_range,
+            height=mem_range,
+            angle=0,
+            facecolor=mem_line.get_color(),
+            edgecolor=mem_line.get_color(),
+            alpha=0.20,
+            linewidth=1.5,
+            label=label
+        )
+
+        ellipse_ax.add_patch(ellipse)
+
+        # Mark the center of the min/max range
+        ellipse_ax.plot(cpu_center, mem_center, marker=".", color=mem_line.get_color())
+
+    # ------------------------------------------------------------------
+    # Experiment boundaries
+    # ------------------------------------------------------------------
+
     # Convert experiment end time to seconds relative to experiment start
     experiment_end_elapsed = (experiment_end - experiment_start ).total_seconds()
 
@@ -112,6 +156,10 @@ def main(output_path: str, inputs: list[str]):
 
     ax1.text(0, 0.6, "t0", transform=ax1.get_xaxis_transform(), rotation=90, va="top", ha="right", color="grey")
     ax1.text(experiment_end_elapsed + 1, 0.6, "t_end", transform=ax1.get_xaxis_transform(), rotation=90, va="top", ha="left", color="grey")
+
+    # ------------------------------------------------------------------
+    # Time-series plot formatting
+    # ------------------------------------------------------------------
 
     ax1.set_xlabel("Time (seconds since experiment start)")
     ax1.set_ylabel("— Used Memory (MiB)")
@@ -140,9 +188,44 @@ def main(output_path: str, inputs: list[str]):
         frameon=False
     )
 
-    plt.tight_layout(rect=(0, 0, 1.0 + 0.0035 * max_label, 1))
-    plt.savefig(Path(output_path).with_suffix('.svg'))
-    plt.savefig(Path(output_path).with_suffix('.png'))
+    fig.tight_layout(rect=(0, 0, 1.0 + 0.0035 * max_label, 1))
+
+    # ------------------------------------------------------------------
+    # Ellipse plot formatting
+    # ------------------------------------------------------------------
+
+    ellipse_ax.set_xlabel("CPU load (%)")
+    ellipse_ax.set_ylabel("Used Memory (MiB)")
+    ellipse_ax.set_title("CPU load vs. Used Memory")
+
+    # Adaptive CPU axis based on the actual data.
+    cpu_min_all = min(all_cpu_values)
+    cpu_max_all = max(all_cpu_values)
+
+    cpu_range = cpu_max_all - cpu_min_all
+    cpu_margin = max(cpu_range * 0.05, 1.0)
+
+    ellipse_ax.set_xlim(
+        max(0, cpu_min_all - cpu_margin),
+        cpu_max_all + cpu_margin
+    )
+    ellipse_ax.set_ylim(bottom=0)
+
+    # Use the experiment names for the ellipse legend
+    ellipse_ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.85), frameon=False )
+    ellipse_ax.grid(True, alpha=0.2)
+
+    ellipse_fig.tight_layout()
+
+    # ------------------------------------------------------------------
+    # Save both plots
+    # ------------------------------------------------------------------
+    output_path = Path(output_path)
+
+    fig.savefig(Path(output_path).with_suffix('.svg'))
+    fig.savefig(Path(output_path).with_suffix('.png'))
+    ellipse_fig.savefig(output_path.with_name(output_path.stem + "_ellipse.svg"))
+    ellipse_fig.savefig(output_path.with_name(output_path.stem + "_ellipse.png"))
 
 
 if __name__ == "__main__":
