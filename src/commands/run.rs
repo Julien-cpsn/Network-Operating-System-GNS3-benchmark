@@ -10,6 +10,7 @@ use tracing::{debug, error, info, warn};
 use pyo3::Python;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::util::SubscriberInitExt;
 use crate::args::run::RunCommand;
 use crate::GUEST_IMAGE_PATH;
@@ -46,7 +47,7 @@ use crate::utils::os_commands::routing::rip_config::router_configure_rip_command
 use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
 use crate::utils::route::generate_distant_network_from_test;
 use crate::utils::test::{clear_shared_dir, harvest_results, test_task};
-use crate::utils::utils::{filter_guests_mut, filter_routers_mut};
+use crate::utils::utils::{filter_guests, filter_guests_mut, filter_routers, filter_routers_mut};
 
 pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     const TARGET: &str = "run";
@@ -82,7 +83,7 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     find_or_upload_images(&gns3, &images_path, &vec![GUEST_IMAGE_PATH.get().unwrap().clone()])?;
 
     let nb_experiments = experiments.len();
-    for (index, experiment) in experiments.drain(..).enumerate() {
+    for (index, mut experiment) in experiments.drain(..).enumerate() {
         let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
         if experiment_path.exists() {
            fs::remove_dir_all(&experiment_path)?;
@@ -95,19 +96,35 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
         let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, EXPERIMENT_LOG_FILE_NAME)?;
         let _log_guard = dispatcher.set_default();
 
-        if let Err(error) = run_experiment(
-            index,
-            nb_experiments,
-            &run_command,
-            &gns3,
-            &os_list,
-            &network_stack_list,
-            &routing_stack_list,
-            &images_path,
-            experiment
-        ).await {
-            error!(target: TARGET, "{}", error);
-            exit(1);
+        let cancellation_token = CancellationToken::new();
+        let token = cancellation_token.clone();
+
+        tokio::select! {
+            result = run_experiment(
+                index,
+                nb_experiments,
+                &run_command,
+                &gns3,
+                &os_list,
+                &network_stack_list,
+                &routing_stack_list,
+                &images_path,
+                &mut experiment,
+                token
+            ) => {
+                if let Err(error) = result {
+                    error!(target: TARGET, "{}", error);
+                    exit(1);
+                }
+            },
+             _ = cancellation_token.cancelled() => {
+                info!(target: TARGET, "Stopping experiment");
+                for (node_name, node) in &experiment.network.nodes {
+                    let gns3_node = node.gns3_node.as_ref().unwrap();
+                    gns3_node.stop()?;
+                    info!(target: TARGET, "Stopping node {node_name}");
+                }
+            }
         }
 
         sleep(Duration::from_secs(1)).await;
@@ -125,11 +142,16 @@ pub async fn run_experiment(
     network_stacks: &IndexMap<String, NetworkStack>,
     routing_stacks: &IndexMap<String, RoutingStack>,
     images_path: &PathBuf,
-    mut experiment: Experiment
+    experiment: &mut Experiment,
+    cancellation_token: CancellationToken
 ) -> anyhow::Result<()> {
     const TARGET: &str = "experiment";
 
     info!(target: TARGET, "----- Running experiment {}/{}: {} -----", index + 1, nb_experiments, experiment.experiment_name);
+
+    ctrlc::set_handler(move || {
+        cancellation_token.cancel()
+    }).expect("Error setting Ctrl-C handler");
 
     /* INITIALIZATION */
 
@@ -139,11 +161,11 @@ pub async fn run_experiment(
     find_and_delete_templates(&gns3)?;
     find_and_delete_log_files(&experiment.experiment_name, &experiment.network.nodes)?;
 
-    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
         generate_and_create_guest_template(&gns3, &guest_name, &node)?;
     }
 
-    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
         let router = node.unwrap_router();
         debug!(target: TARGET, "Ensuring \"{}\" operating system image ({}) is uploaded", router_name, router.os_name);
 
@@ -198,7 +220,7 @@ pub async fn run_experiment(
 
     /* START */
 
-    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting guest: {}", guest_name);
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start()?;
@@ -206,7 +228,7 @@ pub async fn run_experiment(
 
     /* CONFIG */
 
-    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
         let guest = node.unwrap_guest();
         let mut config_commands = guest_config_commands(guest.ip.address());
 
@@ -228,7 +250,7 @@ pub async fn run_experiment(
         )?;
     }
 
-    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting router: {}", router_name);
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start()?;
@@ -257,7 +279,7 @@ pub async fn run_experiment(
         )?;
     }
 
-    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
@@ -354,7 +376,7 @@ pub async fn run_experiment(
     let stop_monitoring = Arc::new(AtomicBool::new(false));
     let mut monitor_threads = JoinSet::new();
 
-    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
         let router  = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
