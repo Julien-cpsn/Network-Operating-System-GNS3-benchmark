@@ -1,9 +1,8 @@
-use std::net::Ipv4Addr;
-use cidr::Ipv4Cidr;
-use crate::models::gns3::node::Gns3Node;
 use crate::models::nodes::guest::{GenericGuest, Guest};
 use crate::models::nodes::router::{GenericRouter, Router};
+use cidr::Ipv4Cidr;
 use serde::{Deserialize, Serialize};
+use std::net::Ipv4Addr;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
@@ -19,7 +18,7 @@ pub struct Node {
     pub node_type: NodeType,
 
     #[serde(skip)]
-    pub gns3_node: Option<Gns3Node>,
+    pub gns3_node: Option<gns3fy_rs::Node>,
 
     #[serde(skip)]
     pub distant_networks: Vec<DistantNetwork>

@@ -13,7 +13,7 @@ pub async fn test_task(
     experiment_name: String,
     from_node_name: String,
     console_host: String,
-    console: u32,
+    console: i64,
     test_commands: Vec<OsCommand>,
 ) -> anyhow::Result<()> {
     execute_commands(

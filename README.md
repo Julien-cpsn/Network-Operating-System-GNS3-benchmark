@@ -65,12 +65,6 @@ Then you should see all possible experiments created in `./experimentation/exper
 
 ### 4. Run the experiments
 
-> [!WARNING]
-> You need to source the Python environment first
-> ```shell
-> source .venv/bin/activate
-> ```
-
 Run the GNS3 server:
 
 ```shell
@@ -83,7 +77,7 @@ Then you can run experiments:
 cargo run -- run --os SONiC --topology Dumbbell --protocol RIP --nic e1000 --test-batch "Basic RRUL at start" --resources hr
 ```
 
-The command will run every experiments for SONiC OS, on Dumbbell topology, using RIP protocol, using E1000 NIC, using high resources, and the "Basic RRUL at start" test.
+The command will run every experiment for SONiC OS, on Dumbbell topology, using RIP protocol, using E1000 NIC, using high resources, and the "Basic RRUL at start" test.
 By removing an argument, the program will loop over all of its possible values. For example, by removing `--nic e1000`, the program with run the experiments with `rtl8139`, then with `e1000`, and then with `virtio-net-pci`. 
 
 Results are stored in `./experimentation/results/`

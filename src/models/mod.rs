@@ -1,4 +1,3 @@
-pub mod gns3;
 pub mod operating_system;
 pub mod test;
 pub mod experiment;

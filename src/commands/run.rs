@@ -5,18 +5,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use anyhow::anyhow;
+use gns3fy_rs::Gns3Connector;
 use indexmap::IndexMap;
 use tracing::{debug, error, info, warn};
-use pyo3::Python;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::util::SubscriberInitExt;
 use crate::args::run::RunCommand;
-use crate::GUEST_IMAGE_PATH;
+use crate::{GNS3_SERVER_PASSWORD, GNS3_SERVER_URL, GNS3_SERVER_USERNAME, GUEST_IMAGE_PATH};
 use crate::models::experiment::Experiment;
 use crate::models::failure_event::FailureEvent;
-use crate::models::gns3::connector::Gns3Connector;
 use crate::models::network_stack::NetworkStack;
 use crate::models::nodes::node::{NodeType};
 use crate::models::operating_system::OperatingSystem;
@@ -62,10 +61,6 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
         fs::create_dir(&*RESULT_DIR_PATH)?;
     }
 
-    info!(target: TARGET, "Initializing Python interpreter");
-    Python::initialize();
-    info!(target: TARGET, "Python interpreter initialized!");
-
     let mut experiments = parse_experiments_files(&run_command.experiment_selection)?;
 
     if experiments.is_empty() {
@@ -73,14 +68,19 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
         exit(0);
     }
 
-    let gns3 = Python::attach(|py| Gns3Connector::new(py))?;
+    let gns3 = Arc::new(
+        Gns3Connector::builder(GNS3_SERVER_URL.get().unwrap())
+            .user(GNS3_SERVER_USERNAME.get().unwrap())
+            .cred(GNS3_SERVER_PASSWORD.get().unwrap())
+            .build()?
+    );
 
     let images_path = get_gns3_images_path()?;
     let network_stack_list = parse_network_stack_list_file()?;
     let routing_stack_list = parse_routing_stack_list_file()?;
     let os_list = parse_os_list_file(network_stack_list.keys().collect(), routing_stack_list.keys().collect())?;
 
-    find_or_upload_images(&gns3, &images_path, &vec![GUEST_IMAGE_PATH.get().unwrap().clone()])?;
+    find_or_upload_images(&gns3, &images_path, &vec![GUEST_IMAGE_PATH.get().unwrap().clone()]).await?;
 
     let nb_experiments = experiments.len();
     for (index, mut experiment) in experiments.drain(..).enumerate() {
@@ -119,9 +119,9 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
             },
              _ = cancellation_token.cancelled() => {
                 info!(target: TARGET, "Stopping experiment");
-                for (node_name, node) in &experiment.network.nodes {
-                    let gns3_node = node.gns3_node.as_ref().unwrap();
-                    gns3_node.stop()?;
+                for (node_name, node) in experiment.network.nodes.iter_mut() {
+                    let gns3_node = node.gns3_node.as_mut().unwrap();
+                    gns3_node.stop().await?;
                     info!(target: TARGET, "Stopping node {node_name}");
                 }
             }
@@ -137,7 +137,7 @@ pub async fn run_experiment(
     index: usize,
     nb_experiments: usize,
     run_command: &RunCommand,
-    gns3: &Gns3Connector,
+    gns3: &Arc<Gns3Connector>,
     oses: &IndexMap<String, OperatingSystem>,
     network_stacks: &IndexMap<String, NetworkStack>,
     routing_stacks: &IndexMap<String, RoutingStack>,
@@ -157,12 +157,12 @@ pub async fn run_experiment(
 
     let experiment_start = Instant::now();
 
-    find_and_delete_projects(&gns3)?;
-    find_and_delete_templates(&gns3)?;
+    find_and_delete_projects(gns3.clone()).await?;
+    find_and_delete_templates(gns3.clone()).await?;
     find_and_delete_log_files(&experiment.experiment_name, &experiment.network.nodes)?;
 
     for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
-        generate_and_create_guest_template(&gns3, &guest_name, &node)?;
+        generate_and_create_guest_template(gns3.clone(), &guest_name, &node).await?;
     }
 
     for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
@@ -170,25 +170,26 @@ pub async fn run_experiment(
         debug!(target: TARGET, "Ensuring \"{}\" operating system image ({}) is uploaded", router_name, router.os_name);
 
         let operating_system = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system found for {}", router.os_name))?;
-        find_or_upload_images(&gns3, images_path, &operating_system.images_path)?;
+        find_or_upload_images(&gns3, images_path, &operating_system.images_path).await?;
     }
 
     /* SETUP */
 
-    let project = create_project(&gns3, &experiment.experiment_name)?;
+    let project = create_project(gns3.clone(), &experiment.experiment_name).await?;
+    let project_id = project.project_id.expect("Project has no ID");
 
     for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
-        generate_and_create_router_template(&gns3, &router_name, &node, &os.images_path)?;
+        generate_and_create_router_template(gns3.clone(), &router_name, &node, &os.images_path).await?;
 
-        let gns3_node = create_node(&gns3, &project.project_id, router_name, node.x, node.y)?;
+        let gns3_node = create_node(gns3.clone(), &project_id, router_name, node.x, node.y).await?;
         node.gns3_node = Some(gns3_node);
     }
 
     for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
-        let gns3_node = create_node(&gns3, &project.project_id, guest_name, node.x, node.y)?;
+        let gns3_node = create_node(gns3.clone(), &project_id, guest_name, node.x, node.y).await?;
         node.gns3_node = Some(gns3_node);
     }
 
@@ -198,7 +199,7 @@ pub async fn run_experiment(
         let (node_a_name, node_a) = experiment.network.nodes.get_key_value(&link.node_a).ok_or_else(|| anyhow!("Node a \"{}\" not found in link {}", &link.node_a, index))?;
         let (node_b_name, node_b) = experiment.network.nodes.get_key_value(&link.node_b).ok_or_else(|| anyhow!("Node b \"{}\" not found in link {}", &link.node_b, index))?;
 
-        let gns3_link = create_link(&gns3, &project.project_id, node_a_name, node_b_name, node_a, node_b, link.adapter_a, link.adapter_b)?;
+        let gns3_link = create_link(gns3.clone(), &project_id, node_a_name, node_b_name, node_a, node_b, link.adapter_a, link.adapter_b).await?;
 
         links.push((link, gns3_link));
     }
@@ -220,10 +221,10 @@ pub async fn run_experiment(
 
     /* START */
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests_mut(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting guest: {}", guest_name);
-        let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
-        gns3_node.start()?;
+        let gns3_node = node.gns3_node.as_mut().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
+        gns3_node.start().await?;
     }
 
     /* CONFIG */
@@ -250,11 +251,8 @@ pub async fn run_experiment(
         )?;
     }
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers_mut(&mut experiment.network.nodes) {
         info!(target: TARGET, "Starting router: {}", router_name);
-        let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
-        gns3_node.start()?;
-        
         // Login
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
@@ -268,6 +266,9 @@ pub async fn run_experiment(
         };
 
         let login_commands = router_login_commands(&command_context)?;
+
+        let gns3_node = node.gns3_node.as_mut().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
+        gns3_node.start().await?;
 
         execute_commands_from_node(
             &experiment.experiment_name,
@@ -399,8 +400,8 @@ pub async fn run_experiment(
             monitor_threads.spawn(monitor_task(
                 experiment.experiment_name.clone(),
                 router_name.clone(),
-                gns3_node.console_host(),
-                gns3_node.console(),
+                gns3_node.console_host.as_ref().unwrap().to_string(),
+                gns3_node.console.unwrap(),
                 os.input_ready.clone(),
                 monitor_commands,
                 stop_monitoring.clone()
@@ -456,8 +457,8 @@ pub async fn run_experiment(
             test_threads.spawn(test_task(
                 experiment.experiment_name.clone(),
                 from_node_name.to_owned(),
-                from_gns3_node.console_host(),
-                from_gns3_node.console(),
+                from_gns3_node.console_host.as_ref().unwrap().to_string(),
+                from_gns3_node.console.unwrap().clone(),
                 test_batch_commands
             ));
         }
@@ -483,9 +484,9 @@ pub async fn run_experiment(
     clear_shared_dir()?;
     
     if !run_command.run_command.no_stop {
-        for (node_name, node) in &experiment.network.nodes {
+        for (node_name, node) in experiment.network.nodes.iter_mut() {
             debug!(target: TARGET, "Stoping node: {}", node_name);
-            node.gns3_node.as_ref().unwrap().stop()?;
+            node.gns3_node.as_mut().unwrap().stop().await?;
         }
     }
 

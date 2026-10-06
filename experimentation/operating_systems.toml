@@ -241,6 +241,29 @@ done""",
         { expect = "", control = 'c' }
     ]
 
+# [vJunos]
+#    trigger_sequence = [
+#        { expect = "login: ", send = "root"},
+#        { expect = "Password: ", send = ""},
+#    ]
+#    input_ready = ":~"
+#    login = "root"
+#    #password = "debian"
+#    network_stack = "Linux network stack"
+#    #routing_stack = null
+#    interface_prefix = "ens"
+#    interfaces_start_at = 3
+#    images_path = ["/home/julien/Programmation/vm/Junos vRouter/vJunos-switch-26.2R1.7.qcow2"]
+#    resources_monitor_commands = [
+#        """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
+#    while true
+#    do
+#    free -m | awk '/^Mem:/{printf("%s\\t%s\\t%s\\t", $2, $7, $3)}' && grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' && sleep 1
+#    done""",
+#        { expect = "", wait = 60_000_000 },
+#        { expect = "", control = 'c' }
+#    ]
+
 [VyOS]
     input_ready = ":~"
     login = "vyos"

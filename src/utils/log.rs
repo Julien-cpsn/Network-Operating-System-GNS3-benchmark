@@ -5,7 +5,9 @@ use crate::ARGS;
 use std::io::stdout;
 use indexmap::IndexMap;
 use tracing::{subscriber, Dispatch, Level, debug};
+use tracing::metadata::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::filter::Targets;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::layer::SubscriberExt;
@@ -49,7 +51,13 @@ pub fn setup_experiment_logger(experiment_name: &str, name: &str) -> anyhow::Res
     let (log_file_writer, file_guard) = tracing_appender::non_blocking(log_dir_file);
     let log_file_writer = log_file_writer.with_max_level(Level::TRACE);
 
+    let filter = Targets::new()
+        .with_default(verbosity)
+        .with_target("reqwest", LevelFilter::ERROR)
+        .with_target("hyper_util", LevelFilter::ERROR);
+
     let subscriber = Registry::default()
+        .with(filter)
         .with(Layer::new()
             .with_writer(stdout.with_max_level(verbosity))
         )

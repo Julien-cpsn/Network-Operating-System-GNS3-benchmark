@@ -4,10 +4,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use anyhow::anyhow;
+use gns3fy_rs::Node;
 use rexpect::error::Error;
 use tracing::{debug, dispatcher, trace};
 use rexpect::session::{Options, PtySession};
-use crate::models::gns3::node::Gns3Node;
 use crate::models::os_command::{OsCommand, SendType};
 use crate::utils::log::setup_experiment_logger;
 
@@ -15,15 +15,15 @@ const TARGET: &str = "telnet";
 
 //const TIMEOUT: Duration = Duration::from_secs(240);
 
-pub fn execute_commands_from_node(experiment_name: &str, node_name: &str, gns3_node: &Gns3Node, commands: Vec<OsCommand>, timeout: Option<u64>, remote_stop: Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
-    execute_commands(&experiment_name, &node_name, &gns3_node.console_host(), gns3_node.console(), commands, timeout, remote_stop)
+pub fn execute_commands_from_node(experiment_name: &str, node_name: &str, gns3_node: &Node, commands: Vec<OsCommand>, timeout: Option<u64>, remote_stop: Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
+    execute_commands(&experiment_name, &node_name, gns3_node.console_host.as_ref().unwrap(), gns3_node.console.unwrap(), commands, timeout, remote_stop)
 }
 
 pub fn execute_commands(
     experiment_name: &str,
     node_name: &str,
     console_host: &str,
-    console: u32,
+    console: i64,
     commands: Vec<OsCommand>,
     timeout: Option<u64>,
     remote_stop: Option<Arc<AtomicBool>>,

@@ -5,10 +5,6 @@ description = "Network Operating System GNS3 benchmark"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "gns3fy>=0.8.0",
     "matplotlib>=3.9.4",
     "pyqt6>=6.10.2",
 ]
-
-[tool.uv.sources]
-gns3fy = { git = "https://github.com/Julien-cpsn/gns3fy" }

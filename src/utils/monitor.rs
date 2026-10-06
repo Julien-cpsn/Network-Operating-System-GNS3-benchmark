@@ -10,7 +10,7 @@ pub async fn monitor_task(
     experiment_name: String,
     router_name: String,
     console_host: String,
-    console: u32,
+    console: i64,
     input_ready: String,
     mut monitor_command: Vec<OsCommand>,
     stop_monitoring: Arc<AtomicBool>
