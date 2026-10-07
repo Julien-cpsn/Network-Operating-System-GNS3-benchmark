@@ -52,7 +52,7 @@ pub fn setup_experiment_logger(experiment_name: &str, name: &str) -> anyhow::Res
     let log_file_writer = log_file_writer.with_max_level(Level::TRACE);
 
     let filter = Targets::new()
-        .with_default(verbosity)
+        .with_default(Level::TRACE)
         .with_target("reqwest", LevelFilter::ERROR)
         .with_target("hyper_util", LevelFilter::ERROR);
 
