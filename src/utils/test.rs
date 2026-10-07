@@ -30,7 +30,7 @@ pub async fn test_task(
 }
 
 pub fn harvest_results(experiment_name: &str, test: &Test) -> anyhow::Result<()> {
-    info!(target: TARGET, "Harvesting results...");
+    info!(target: TARGET, "Harvesting results for test {}...", &test.name);
 
     let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
     fs::create_dir_all(&result_path)?;
@@ -39,7 +39,7 @@ pub fn harvest_results(experiment_name: &str, test: &Test) -> anyhow::Result<()>
     let result_files: Vec<DirEntry> = walk_result_files
         .into_iter()
         .filter_map(|f| f.ok())
-        .filter(|f| f.file_type().is_file())
+        .filter(|f| f.file_type().is_file() && !f.path().iter().any(|p| p.eq(".virtfs_metadata")))
         .collect();
 
     if result_files.is_empty() {
