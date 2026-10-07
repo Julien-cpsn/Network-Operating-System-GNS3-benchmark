@@ -82,6 +82,13 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
 
     find_or_upload_images(&gns3, &images_path, &vec![GUEST_IMAGE_PATH.get().unwrap().clone()]).await?;
 
+    let cancellation_token = CancellationToken::new();
+    let token = cancellation_token.clone();
+
+    ctrlc::set_handler(move || {
+        cancellation_token.cancel()
+    }).expect("Error setting Ctrl-C handler");
+
     let nb_experiments = experiments.len();
     for (index, mut experiment) in experiments.drain(..).enumerate() {
         let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
@@ -96,8 +103,6 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
         let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, EXPERIMENT_LOG_FILE_NAME)?;
         let _log_guard = dispatcher.set_default();
 
-        let cancellation_token = CancellationToken::new();
-        let token = cancellation_token.clone();
 
         tokio::select! {
             result = run_experiment(
@@ -110,14 +115,13 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
                 &routing_stack_list,
                 &images_path,
                 &mut experiment,
-                token
             ) => {
                 if let Err(error) = result {
                     error!(target: TARGET, "{}", error);
                     exit(1);
                 }
             },
-             _ = cancellation_token.cancelled() => {
+             _ = token.cancelled() => {
                 info!(target: TARGET, "Stopping experiment");
                 for (node_name, node) in experiment.network.nodes.iter_mut() {
                     let gns3_node = node.gns3_node.as_mut().unwrap();
@@ -143,15 +147,10 @@ pub async fn run_experiment(
     routing_stacks: &IndexMap<String, RoutingStack>,
     images_path: &PathBuf,
     experiment: &mut Experiment,
-    cancellation_token: CancellationToken
 ) -> anyhow::Result<()> {
     const TARGET: &str = "experiment";
 
     info!(target: TARGET, "----- Running experiment {}/{}: {} -----", index + 1, nb_experiments, experiment.experiment_name);
-
-    ctrlc::set_handler(move || {
-        cancellation_token.cancel()
-    }).expect("Error setting Ctrl-C handler");
 
     /* INITIALIZATION */
 
