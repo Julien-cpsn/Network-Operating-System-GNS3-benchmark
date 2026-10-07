@@ -20,9 +20,17 @@ pub enum HardwareResources {
 impl HardwareResources {
     pub fn to_vcpu_and_ram(&self) -> (u32, u32) {
         match self {
-            HardwareResources::LowResources => (1, 1024),
-            HardwareResources::MediumResources => (2, 2048),
-            HardwareResources::HighResources => (4, 8192)
+            HardwareResources::LowResources => (2, 4096),
+            HardwareResources::MediumResources => (4, 8192),
+            HardwareResources::HighResources => (8, 16384)
+        }
+    }
+
+    pub fn to_command(&self) -> &str {
+        match self {
+            HardwareResources::LowResources => "lr",
+            HardwareResources::MediumResources => "mr",
+            HardwareResources::HighResources => "hr"
         }
     }
 }

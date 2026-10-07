@@ -31,7 +31,8 @@ const TARGET: &str = "generate";
 pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
     let experiment_selection = match &generate_command.command {
         GenerateSubcommand::Run(run_command) => &run_command.experiment_selection,
-        GenerateSubcommand::Files { experiment_selection, .. } => &experiment_selection
+        GenerateSubcommand::Files { experiment_selection, .. } => &experiment_selection,
+        GenerateSubcommand::Commands { experiment_selection, .. } => &experiment_selection
     };
 
     let network_stack_list = parse_network_stack_list_file()?;
@@ -77,6 +78,9 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
     let mut experiment_count = 0usize;
 
     for (os_name, os) in &oses_to_use {
+        info!(target: TARGET, "Experiments for {}", os_name);
+        let mut os_xp_count = 0;
+
         let os_dir = create_dir_if_does_not_exist(experiment_dir.join(os_name))?;
 
         for (test_batch_name, test_batch) in &test_batches_to_use {
@@ -115,7 +119,25 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                             let experiment_path = routing_protocol_dir.join("experiment.json");
 
                             experiment_count += 1;
-                            info!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
+                            os_xp_count += 1;
+
+                            match &generate_command.command {
+                                GenerateSubcommand::Run(_) | GenerateSubcommand::Files { .. } => {
+                                    info!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
+                                }
+                                GenerateSubcommand::Commands { .. } => {
+                                    println!(
+                                        "cargo run -- run --os \"{}\" --test-batch \"{}\" --resources \"{}\" --topology \"{}\" --nic \"{}\" --protocol \"{}\"",
+                                        os_name,
+                                        test_batch_name,
+                                        resources.to_command(),
+                                        topology_name,
+                                        nic,
+                                        routing_protocol
+                                    );
+                                    continue;
+                                }
+                            }
 
                             if experiment_path.exists() && override_ == false {
                                 continue;
@@ -213,6 +235,8 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                 }
             }
         }
+
+        info!(target: TARGET, "Estimated total experiment duration for {}: {} minutes", os_name, os_xp_count * 4);
     }
 
     // Experiment count

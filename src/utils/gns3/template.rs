@@ -47,7 +47,7 @@ pub async fn generate_and_create_guest_template(gns3: Arc<Gns3Connector>, guest_
         port_name_format: Some(String::from("ens{port4}")),
         port_segment_size: Some(0),
         custom_adapters: None,
-        options: Some(format!("-virtfs local,path=\"{}\",mount_tag=shared_folder,id=shared_folder,security_model=mapped-file", SHARED_DIR_PATH.display())),
+        options: Some(format!("-mem-prealloc -virtfs local,path=\"{}\",mount_tag=shared_folder,id=shared_folder,security_model=mapped-file", SHARED_DIR_PATH.display())),
         boot_priority: Some(String::from("c")),
         on_close: Some(String::from("power_off")),
         process_priority: Some(String::from("normal")),

@@ -20,17 +20,18 @@ pub const EXPERIMENT_LOG_FILE_NAME: &str = "experiment";
 
 pub fn setup_global_logger() -> anyhow::Result<()> {
     let verbosity = match (ARGS.verbosity.is_present(), ARGS.verbosity.tracing_level()) {
-        (true, Some(level)) => level,
-        _ => Level::DEBUG
+        (true, level) => level,
+        _ => Some(Level::DEBUG)
     };
 
-    let subscriber = Registry::default()
-        .with(
-            Layer::new()
-                .with_writer(stdout.with_max_level(verbosity))
-        );
+    if let Some(level) = verbosity {
+        let subscriber = Registry::default()
+            .with(
+                Layer::new().with_writer(stdout.with_max_level(level))
+            );
 
-    subscriber::set_global_default(subscriber)?;
+        subscriber::set_global_default(subscriber)?;
+    }
 
     Ok(())
 }

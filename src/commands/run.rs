@@ -270,6 +270,8 @@ pub async fn run_experiment(
         let gns3_node = node.gns3_node.as_mut().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         gns3_node.start().await?;
 
+        info!(target: TARGET, "Telnet console: telnet {} {}", gns3_node.console_host.as_ref().unwrap(), gns3_node.console.unwrap());
+
         execute_commands_from_node(
             &experiment.experiment_name,
             &router_name,

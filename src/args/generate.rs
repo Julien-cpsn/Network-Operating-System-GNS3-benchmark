@@ -21,5 +21,9 @@ pub enum GenerateSubcommand {
 
         #[clap(flatten)]
         experiment_selection: ExperimentSelectionArgs,
+    },
+    Commands {
+        #[clap(flatten)]
+        experiment_selection: ExperimentSelectionArgs,
     }
 }
