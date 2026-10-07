@@ -12,3 +12,5 @@
 /experimentation/results/*
 /experimentation/shared_with_vm/*
 /experimentation/plots/*
+
+run_experiment.sh

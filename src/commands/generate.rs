@@ -132,7 +132,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                         test_batch_name,
                                         resources.to_command(),
                                         topology_name,
-                                        nic,
+                                        nic.to_command(),
                                         routing_protocol
                                     );
                                     continue;

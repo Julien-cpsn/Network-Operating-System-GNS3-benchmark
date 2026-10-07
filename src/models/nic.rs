@@ -50,4 +50,12 @@ impl NicType {
             NicType::VirtIO => String::from("virtio-net-pci")
         }
     }
+
+    pub fn to_command(&self) -> &str {
+        match self {
+            NicType::Rtl8139 => "rtl8139",
+            NicType::E1000 => "e1000",
+            NicType::VirtIO => "virt-io"
+        }
+    }
 }
