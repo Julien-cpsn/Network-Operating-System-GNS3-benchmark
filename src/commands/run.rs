@@ -48,6 +48,10 @@ use crate::utils::route::generate_distant_network_from_test;
 use crate::utils::test::{clear_shared_dir, harvest_results, test_task};
 use crate::utils::utils::{filter_guests, filter_guests_mut, filter_routers, filter_routers_mut};
 
+pub const INTER_XP_WAIT: u64 = 1;
+pub const INTRA_XP_WAIT: u64 = 60;
+pub const POST_XP_WAIT: u64 = 10;
+
 pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     const TARGET: &str = "run";
 
@@ -131,7 +135,7 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
             }
         }
 
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(INTER_XP_WAIT)).await;
     }
 
     Ok(())
@@ -414,7 +418,7 @@ pub async fn run_experiment(
     if !run_command.run_command.no_sleep {
         info!(target: TARGET, "Waiting 1 minute");
         // Sleep 1 min so that the network can discuss
-        sleep(Duration::from_secs(60)).await;
+        sleep(Duration::from_secs(INTRA_XP_WAIT)).await;
     }
 
     /* FAILURE EVENTS */
@@ -472,7 +476,7 @@ pub async fn run_experiment(
 
     info!(target: TARGET, "Waiting 10 seconds");
     // Sleep 10 seconds so we can have monitoring after the end of the experiment
-    sleep(Duration::from_secs(10)).await;
+    sleep(Duration::from_secs(POST_XP_WAIT)).await;
 
     stop_monitoring.store(true, Ordering::Relaxed);
     monitor_threads.join_all().await;

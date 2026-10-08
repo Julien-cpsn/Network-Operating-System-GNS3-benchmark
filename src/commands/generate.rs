@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use tracing::{error, info, warn};
 use strum::VariantArray;
 use crate::args::generate::{GenerateCommand, GenerateSubcommand};
+use crate::commands::run::{INTRA_XP_WAIT, POST_XP_WAIT};
 use crate::models::experiment::Experiment;
 use crate::models::hardware_resources::HardwareResources;
 use crate::models::network::Network;
@@ -79,7 +80,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
 
     for (os_name, os) in &oses_to_use {
         info!(target: TARGET, "Experiments for {}", os_name);
-        let mut os_xp_count = 0;
+        let mut os_xp_seconds = 0;
 
         let os_dir = create_dir_if_does_not_exist(experiment_dir.join(os_name))?;
 
@@ -119,7 +120,18 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                             let experiment_path = routing_protocol_dir.join("experiment.json");
 
                             experiment_count += 1;
-                            os_xp_count += 1;
+
+                            let mut longest_xp = 0;
+
+                            for test in test_batch {
+                                let total_duration = test.fire_at + test.duration;
+
+                                if total_duration > longest_xp {
+                                    longest_xp = total_duration
+                                }
+                            }
+
+                            os_xp_seconds += 60 * topology.network.nodes.len() + INTRA_XP_WAIT as usize + longest_xp as usize + POST_XP_WAIT as usize + INTRA_XP_WAIT as usize;
 
                             match &generate_command.command {
                                 GenerateSubcommand::Run(_) | GenerateSubcommand::Files { .. } => {
@@ -236,7 +248,10 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
             }
         }
 
-        info!(target: TARGET, "Estimated total experiment duration for {}: {} minutes", os_name, os_xp_count * 4);
+        let minutes = os_xp_seconds / 60;
+        let hours = minutes / 60;
+        let days = hours / 24;
+        info!(target: TARGET, "Estimated total experiment duration for {} is {:0>2}:{:0>2}:{:0>2}:{:0>2} (D:H:M:S)", os_name, days, hours % 24, minutes % 60, os_xp_seconds % 60);
     }
 
     // Experiment count
