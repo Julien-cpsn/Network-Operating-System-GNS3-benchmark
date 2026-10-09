@@ -3,6 +3,7 @@ pub(crate) mod utils;
 pub(crate) mod args;
 pub(crate) mod commands;
 
+use crate::commands::deploy_g5k::deploy_g5k;
 use crate::commands::generate::generate;
 use crate::commands::run::run;
 use tracing::{info};
@@ -46,6 +47,7 @@ async fn handle_command(command: &Command) -> anyhow::Result<()> {
         },
         Command::Run(run_command) => run(run_command.clone()).await?,
         Command::Plot(plot_command) => plot(plot_command.clone())?,
+        Command::DeployG5k(deploy_command) => deploy_g5k(deploy_command.clone()).await?,
     }
 
     Ok(())
