@@ -3,8 +3,7 @@ use clap::Subcommand;
 #[derive(Debug, Clone, Subcommand)]
 pub enum G5kCommands {
     Deploy(DeployG5kCommand),
-    // Add command to harvest results from https://api.grid5000.fr/stable/sites/SITE/public/USER/results/ here
-    // apache web directory
+    // Todo: HERE
 }
 
 #[derive(Debug, Clone, clap::Args)]
