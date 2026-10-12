@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -5,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context};
+use ini::Ini;
 use serde_json::{json, Value};
 use ssh2::{CheckResult, KnownHostFileKind, Session};
 use tokio::time::sleep;
@@ -61,6 +63,8 @@ pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
     }
 
     let image_paths = os.images_path.clone();
+    // Every image of the operating systems file, since the previous experiment may have used another OS
+    let all_image_paths: Vec<PathBuf> = os_list.values().flat_map(|os| os.images_path.iter().cloned()).collect();
 
     let password = tokio::task::spawn_blocking(|| rpassword::prompt_password("Grid5000 password: ")).await??;
     println!();
@@ -73,7 +77,9 @@ pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
         let remote_vm_dir = remote_vm_dir.clone();
         let remote_os_dir = remote_os_dir.clone();
 
-        tokio::task::spawn_blocking(move || upload_images(&user, &remote_vm_dir, &remote_os_dir, &image_paths)).await??;
+        let site = command.site.clone();
+
+        tokio::task::spawn_blocking(move || upload_images(&user, &site, &remote_vm_dir, &remote_os_dir, &image_paths, &all_image_paths)).await??;
     }
 
     let job_id = submit_job(&command, &password).await?;
@@ -108,7 +114,7 @@ fn ensure_identifier(what: &str, value: &str, allow_upper: bool) -> anyhow::Resu
 
 // ---------------------------------------------------------------- SSH
 
-fn upload_images(user: &str, remote_vm_dir: &str, remote_os_dir: &str, image_paths: &[PathBuf]) -> anyhow::Result<()> {
+fn upload_images(user: &str, site: &str, remote_vm_dir: &str, remote_os_dir: &str, image_paths: &[PathBuf], all_image_paths: &[PathBuf]) -> anyhow::Result<()> {
     info!(target: TARGET, "Connecting to Grid'5000 SSH ({G5K_ACCESS_HOST})");
     let session = connect_to_ssh(user)?;
     info!(target: TARGET, "SSH connected successfully");
@@ -122,13 +128,17 @@ fn upload_images(user: &str, remote_vm_dir: &str, remote_os_dir: &str, image_pat
     info!(target: TARGET, "> {command}");
     ssh_exec(&session, &command)?;
 
+    // Remove the images of the previous experiment from the remote GNS3, before uploading the new ones
+    let deleted = delete_remote_gns3_images(&session, user, site, all_image_paths)?;
+    info!(target: TARGET, "Deleted {deleted} image(s) from the remote GNS3");
+
     for image_path in image_paths {
         let file_name = image_path.file_name().ok_or_else(|| anyhow!("Invalid image path \"{}\"", image_path.display()))?;
         // Relative to the remote home directory, which is where SCP starts
         let remote_path = format!("{remote_os_dir}/{}", file_name.to_string_lossy());
 
         info!(target: TARGET, "Uploading \"{}\" to \"~/{remote_path}\"", image_path.display());
-        scp_upload(&session, image_path, &remote_path)?;
+        scp_upload(&session, image_path, &remote_path, 0o644)?;
     }
 
     info!(target: TARGET, "All images uploaded");
@@ -236,11 +246,101 @@ fn ssh_exec(session: &Session, command: &str) -> anyhow::Result<String> {
     Ok(stdout)
 }
 
-fn scp_upload(session: &Session, local_path: &Path, remote_path: &str) -> anyhow::Result<()> {
+/// Remote GNS3 configuration, relative to the site home directory
+const REMOTE_GNS3_CONFIG: &str = ".config/GNS3/2.2/gns3_server.conf";
+/// Remote GNS3 images directory when the configuration does not set one, relative to the site home directory
+const REMOTE_GNS3_DEFAULT_IMAGES_DIR: &str = "GNS3/images";
+
+/// Single-quotes a string for a POSIX shell
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+/// Finds the remote GNS3 images directory, relative to the site home directory (`~/<site>` from the access machine)
+fn remote_gns3_images_dir(session: &Session, user: &str, site: &str) -> anyhow::Result<String> {
+    let config = ssh_exec(session, &format!("cat \"$HOME\"/{site}/{REMOTE_GNS3_CONFIG} 2>/dev/null || true"))?;
+
+    let configured = Ini::load_from_str(&config)
+        .ok()
+        .and_then(|ini| ini.section(Some("Server")).and_then(|server| server.get("images_path").map(str::to_string)));
+
+    let Some(images_path) = configured.filter(|path| !path.trim().is_empty()) else {
+        return Ok(REMOTE_GNS3_DEFAULT_IMAGES_DIR.to_string());
+    };
+
+    // The configuration holds a path as seen from the site frontend, whose home is `~/<site>` from the access machine
+    let relative = images_path
+        .trim()
+        .strip_prefix(&format!("/home/{user}/"))
+        .map(|relative| relative.trim_end_matches('/').to_string())
+        .ok_or_else(|| anyhow!("The remote GNS3 images path \"{images_path}\" is not inside /home/{user}, cannot reach it from {G5K_ACCESS_HOST}"))?;
+
+    if relative.is_empty() || relative.split('/').any(|part| part == "..") {
+        bail!("Unsupported remote GNS3 images path \"{images_path}\"");
+    }
+
+    Ok(relative)
+}
+
+/// Removes the given images from the GNS3 server of the Grid'5000 site, since GNS3 v2.2 has no API to delete an image.
+///
+/// The files are removed from `<images_path>/QEMU/<image name>`, along with the `<image name>.md5sum` file GNS3
+/// creates next to them. Images that are not in GNS3 are skipped. Returns the number of removed images.
+fn delete_remote_gns3_images(session: &Session, user: &str, site: &str, image_paths: &[PathBuf]) -> anyhow::Result<usize> {
+    // Only file names are used, so nothing outside of the GNS3 QEMU directory can be touched.
+    // Several OSes can share the same image (ex: BSDRP-BIRD2 and BSDRP-FRR).
+    let mut seen = HashSet::new();
+    let mut image_names = Vec::new();
+
+    for image_path in image_paths {
+        let name = image_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("Invalid image path \"{}\"", image_path.display()))?;
+
+        if seen.insert(name) {
+            image_names.push(shell_quote(name));
+        }
+    }
+
+    if image_names.is_empty() {
+        return Ok(0);
+    }
+
+    let qemu_dir = format!("{}/QEMU", remote_gns3_images_dir(session, user, site)?);
+    debug!(target: TARGET, "Remote GNS3 QEMU images directory: ~/{site}/{qemu_dir}");
+
+    // Prints the name of every image it removed
+    let command = format!(
+        "cd \"$HOME\"/{site}/{} 2>/dev/null || exit 0; for f in {}; do if [ -e \"$f\" ]; then rm -f -- \"$f\" \"$f.md5sum\" && echo \"$f\"; else rm -f -- \"$f.md5sum\"; fi; done",
+        shell_quote(&qemu_dir),
+        image_names.join(" ")
+    );
+
+    info!(target: TARGET, "> Removing the previous images from ~/{site}/{qemu_dir}");
+    let output = ssh_exec(session, &command)?;
+
+    for name in output.lines() {
+        info!(target: TARGET, "Deleted image \"{name}\" from the remote GNS3");
+    }
+
+    Ok(output.lines().count())
+}
+
+/// Uploads a file over SCP. `remote_path` is relative to the remote home directory.
+///
+/// The path is sent quoted to the remote `scp`, so the remote shell never expands `~`: a leading `~/` would be taken
+/// as a directory literally named `~` and the transfer rejected with `[Session(-28)] failed to send file`.
+/// It is stripped here so that `~/nancy/file.sh` and `nancy/file.sh` both work.
+fn scp_upload(session: &Session, local_path: &Path, remote_path: &str, mode: i32) -> anyhow::Result<()> {
+    let remote_path = remote_path.strip_prefix("~/").unwrap_or(remote_path);
+
     let mut file = File::open(local_path).with_context(|| format!("Could not open \"{}\"", local_path.display()))?;
     let size = file.metadata()?.len();
 
-    let mut channel = session.scp_send(Path::new(remote_path), 0o644, size, None)?;
+    let mut channel = session
+        .scp_send(Path::new(remote_path), mode, size, None)
+        .with_context(|| format!("Could not upload \"{}\" to \"~/{remote_path}\" (does the remote directory exist?)", local_path.display()))?;
 
     let mut buffer = vec![0u8; UPLOAD_CHUNK_SIZE];
     let mut sent: u64 = 0;
