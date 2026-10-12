@@ -76,8 +76,32 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
         fs::create_dir(&plot_output_directory_path)?;
     }
 
+    add_flent_stats(&experiment_results)?;
     plot_flent(&plot_command, &plot_output_directory_path, &experiment_results, &common_words, non_common_words)?;
     plot_resources(&plot_output_directory_path, &experiment_results, &common_words)?;
+
+    Ok(())
+}
+
+fn add_flent_stats(experiment_results: &Vec<ExperimentAndResults>) -> anyhow::Result<()> {
+    for experiment in experiment_results {
+        for (_, result_paths) in &experiment.result_paths_per_test {
+            for result_path in result_paths {
+                let stats_path = result_path.with_extension("stats");
+
+                Command::new("flent")
+                    .arg("-f")
+                    .arg("stats")
+                    .arg("-i")
+                    .arg(result_path)
+                    .arg("-o")
+                    .arg(&stats_path)
+                    .spawn()?;
+
+                info!(target: TARGET, "Added Flent stats for result {}", result_path.display());
+            }
+        }
+    }
 
     Ok(())
 }
