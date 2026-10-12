@@ -75,6 +75,8 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
         warn!(target: TARGET, "Override is not set, existing experiment will NOT be overwritten");
     }
 
+    let mut total_xp_seconds = 0;
+
     let experiment_dir = create_dir_if_does_not_exist(EXPERIMENTS_PATH.clone())?;
     let mut experiment_count = 0usize;
 
@@ -248,14 +250,20 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
             }
         }
 
+        total_xp_seconds += os_xp_seconds;
         let minutes = os_xp_seconds / 60;
         let hours = minutes / 60;
         let days = hours / 24;
-        info!(target: TARGET, "Estimated total experiment duration for {} is {:0>2}:{:0>2}:{:0>2}:{:0>2} (D:H:M:S)", os_name, days, hours % 24, minutes % 60, os_xp_seconds % 60);
+        info!(target: TARGET, "Estimated total experiment duration for {} is {:0>3}:{:0>2}:{:0>2}:{:0>2} (D:H:M:S)", os_name, days, hours % 24, minutes % 60, os_xp_seconds % 60);
     }
 
     // Experiment count
     info!(target: TARGET, "Total of {} individual experiment",  experiment_count);
+
+    let minutes = total_xp_seconds / 60;
+    let hours = minutes / 60;
+    let days = hours / 24;
+    info!(target: TARGET, "Estimated total experiment duration is {:0>3}:{:0>2}:{:0>2}:{:0>2} (D:H:M:S)", days, hours % 24, minutes % 60, total_xp_seconds % 60);
 
     Ok(())
 }

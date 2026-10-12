@@ -25,7 +25,13 @@ pub fn setup_global_logger() -> anyhow::Result<()> {
     };
 
     if let Some(level) = verbosity {
+        let filter = Targets::new()
+            .with_default(level)
+            .with_target("reqwest", LevelFilter::ERROR)
+            .with_target("hyper_util", LevelFilter::ERROR);
+
         let subscriber = Registry::default()
+            .with(filter)
             .with(
                 Layer::new().with_writer(stdout.with_max_level(level))
             );

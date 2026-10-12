@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -10,7 +11,7 @@ use ssh2::{CheckResult, KnownHostFileKind, Session};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
-use crate::args::deploy_g5k::DeployG5kCommand;
+use crate::args::g5k::DeployG5kCommand;
 use crate::utils::files::network_stacks::parse_network_stack_list_file;
 use crate::utils::files::oses::parse_os_list_file;
 use crate::utils::files::routing_stacks::parse_routing_stack_list_file;
@@ -23,13 +24,13 @@ const G5K_API_URL: &str = "https://api.grid5000.fr/stable";
 
 const SSH_TIMEOUT: Duration = Duration::from_secs(30);
 const JOB_POLL_INTERVAL: Duration = Duration::from_secs(5);
-const MAX_CONSECUTIVE_POLL_FAILURES: u32 = 6;
+const MAX_CONSECUTIVE_POLL_FAILURES: u32 = 3;
 const UPLOAD_CHUNK_SIZE: usize = 256 * 1024;
 
 pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
     // Everything below ends up in a remote shell command or in a path, so only accept safe identifiers
-    ensure_identifier("username", &command.user, true)?;
-    ensure_identifier("site", &command.site, false)?;
+    ensure_identifier("username", &command.login.user, true)?;
+    ensure_identifier("site", &command.login.site, false)?;
     ensure_identifier("cluster", &command.cluster, false)?;
     ensure_identifier("queue", &command.queue, false)?;
     ensure_identifier("operating system name", &command.os, true)?;
@@ -60,23 +61,13 @@ pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
         }
     }
 
-    let image_paths = os.images_path.clone();
-
-    let password = tokio::task::spawn_blocking(|| rpassword::prompt_password("Grid5000 password: ")).await??;
+    let password = rpassword::prompt_password("Grid5000 password: ")?;
     println!();
 
-    let remote_vm_dir = format!("{}/survey/vm", command.site);
-    let remote_os_dir = format!("{remote_vm_dir}/{}", command.os);
-
-    {
-        let user = command.user.clone();
-        let remote_vm_dir = remote_vm_dir.clone();
-        let remote_os_dir = remote_os_dir.clone();
-
-        tokio::task::spawn_blocking(move || upload_images(&user, &remote_vm_dir, &remote_os_dir, &image_paths)).await??;
-    }
-
+    prepare_site_machine(&command.login.user, &command.login.site, &command.os, &os.images_path)?;
     let job_id = submit_job(&command, &password).await?;
+
+    info!(target: TARGET, "Results will be available at: https://api.grid5000.fr/stable/sites/{}/public/{}/", &command.login.site,  &command.login.user);
 
     if command.no_wait {
         info!(target: TARGET, "Job {job_id} submitted, not waiting for it (--no-wait)");
@@ -85,7 +76,7 @@ pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
 
     wait_for_job(&command, &password, job_id).await?;
 
-    info!(target: TARGET, "Job {job_id} terminated. Its output is in \"~/{}/benchmark-nos-{}.txt\" on Grid'5000", command.site, command.os);
+    info!(target: TARGET, "Job {job_id} terminated. Its output is in \"~/{}/stdout-benchmark-nos-{}.txt\" on Grid'5000", command.login.site, command.os);
 
     Ok(())
 }
@@ -108,15 +99,12 @@ fn ensure_identifier(what: &str, value: &str, allow_upper: bool) -> anyhow::Resu
 
 // ---------------------------------------------------------------- SSH
 
-fn upload_images(user: &str, remote_vm_dir: &str, remote_os_dir: &str, image_paths: &[PathBuf]) -> anyhow::Result<()> {
+fn prepare_site_machine(user: &str, site: &str, os: &str, image_paths: &[PathBuf]) -> anyhow::Result<()> {
+    let remote_os_dir = format!("{}/survey/vm/{}", site, os);
+
     info!(target: TARGET, "Connecting to Grid'5000 SSH ({G5K_ACCESS_HOST})");
     let session = connect_to_ssh(user)?;
     info!(target: TARGET, "SSH connected successfully");
-
-    // Clear the previous experiment. `~` is expanded by the remote shell, the arguments were validated beforehand
-    let command = format!("rm -rf -- ~/{remote_vm_dir}");
-    info!(target: TARGET, "> {command}");
-    ssh_exec(&session, &command)?;
 
     let command = format!("mkdir -p -- ~/{remote_os_dir}");
     info!(target: TARGET, "> {command}");
@@ -128,10 +116,14 @@ fn upload_images(user: &str, remote_vm_dir: &str, remote_os_dir: &str, image_pat
         let remote_path = format!("{remote_os_dir}/{}", file_name.to_string_lossy());
 
         info!(target: TARGET, "Uploading \"{}\" to \"~/{remote_path}\"", image_path.display());
-        scp_upload(&session, image_path, &remote_path)?;
+        scp_upload(&session, image_path, &remote_path, 0o644)?;
     }
 
     info!(target: TARGET, "All images uploaded");
+
+    info!(target: TARGET, "Uploading run_benchmark_g5k.sh to Grid'5000");
+    scp_upload(&session, &env::current_dir()?.as_path().join("run_benchmark_g5k.sh"), &format!("{site}/run_benchmark_g5k.sh"), 0o774)?;
+    info!(target: TARGET, "run_benchmark_g5k.sh uploaded");
 
     session.disconnect(None, "done", None)?;
 
@@ -160,8 +152,8 @@ fn connect_to_ssh(user: &str) -> anyhow::Result<Session> {
 }
 
 fn home_dir() -> anyhow::Result<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .ok_or_else(|| anyhow!("Could not find your home directory"))
 }
@@ -236,11 +228,26 @@ fn ssh_exec(session: &Session, command: &str) -> anyhow::Result<String> {
     Ok(stdout)
 }
 
-fn scp_upload(session: &Session, local_path: &Path, remote_path: &str) -> anyhow::Result<()> {
+fn scp_upload(session: &Session, local_path: &Path, remote_path: &str, permissions: i32) -> anyhow::Result<()> {
+    let local_size = std::fs::metadata(local_path)
+        .with_context(|| format!("Could not read \"{}\"", local_path.display()))?
+        .len();
+
+    match remote_file_size(session, remote_path)? {
+        Some(remote_size) if remote_size == local_size => {
+            info!(target: TARGET, "\"~/{remote_path}\" already exists ({} MiB), skipping upload", local_size / (1024 * 1024));
+            return Ok(());
+        },
+        Some(remote_size) => {
+            warn!(target: TARGET, "\"~/{remote_path}\" exists but its size differs (remote {remote_size} B, local {local_size} B), uploading again");
+        },
+        None => {}
+    }
+
     let mut file = File::open(local_path).with_context(|| format!("Could not open \"{}\"", local_path.display()))?;
     let size = file.metadata()?.len();
 
-    let mut channel = session.scp_send(Path::new(remote_path), 0o644, size, None)?;
+    let mut channel = session.scp_send(Path::new(remote_path), permissions, size, None)?;
 
     let mut buffer = vec![0u8; UPLOAD_CHUNK_SIZE];
     let mut sent: u64 = 0;
@@ -260,7 +267,7 @@ fn scp_upload(session: &Session, local_path: &Path, remote_path: &str) -> anyhow
 
         if percent >= last_logged_percent + 10 {
             last_logged_percent = percent / 10 * 10;
-            info!(target: TARGET, "  {last_logged_percent}% ({} / {} MiB)", sent / (1024 * 1024), size / (1024 * 1024));
+            info!(target: TARGET, "\t{last_logged_percent}% ({} / {} MiB)", sent / (1024 * 1024), size / (1024 * 1024));
         }
     }
 
@@ -273,33 +280,57 @@ fn scp_upload(session: &Session, local_path: &Path, remote_path: &str) -> anyhow
     Ok(())
 }
 
+/// Size in bytes of a remote regular file, or `None` if it does not exist.
+/// `remote_path` is relative to the remote home directory.
+fn remote_file_size(session: &Session, remote_path: &str) -> anyhow::Result<Option<u64>> {
+    let remote_path = remote_path.strip_prefix("~/").unwrap_or(remote_path);
+
+    // Always exits with 0: prints the size when the file exists and nothing otherwise
+    let command = format!("f=\"$HOME\"/{}; if [ -f \"$f\" ]; then wc -c < \"$f\"; fi", shell_quote(remote_path));
+    let output = ssh_exec(session, &command)?;
+    let output = output.trim();
+
+    if output.is_empty() {
+        return Ok(None);
+    }
+
+    let size = output
+        .parse()
+        .with_context(|| format!("Unexpected size \"{output}\" for remote file \"{remote_path}\""))?;
+
+    Ok(Some(size))
+}
+
+/// Single-quotes a string for a POSIX shell
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 // ---------------------------------------------------------------- Grid'5000 API
 
 async fn submit_job(command: &DeployG5kCommand, password: &str) -> anyhow::Result<u64> {
     let client = reqwest::Client::new();
-    let jobs_url = format!("{G5K_API_URL}/sites/{}/jobs", command.site);
+    let jobs_url = format!("{G5K_API_URL}/sites/{}/jobs", command.login.site);
 
     let resources = match &command.walltime {
         Some(walltime) => format!("nodes=1,walltime={walltime}"),
         None => "nodes=1".to_string(),
     };
 
-    let script = command.script.clone().unwrap_or_else(|| format!("/home/{}/run_benchmark.sh", command.user));
-
     let payload = json!({
         "resources": resources,
-        "command": format!("{script} \"{}\" \"{}\"", command.user, command.os),
-        "stdout": format!("benchmark-nos-{}.txt", command.os),
+        "command": format!("/home/{}/run_benchmark_g5k.sh \"{}\" \"{}\"", command.login.user, command.login.user, command.os),
+        "stdout": format!("stdout-benchmark-nos-{}.txt", command.os),
         "queue": command.queue,
         "properties": format!("cluster='{}'", command.cluster),
-        "name": format!("stdout-benchmark-nos-{}", command.os),
+        "name": format!("benchmark-nos-{}", command.os),
     });
 
-    info!(target: TARGET, "Reserving a node on cluster \"{}\" (queue \"{}\") at {}", command.cluster, command.queue, command.site);
+    info!(target: TARGET, "Reserving a node on cluster \"{}\" (queue \"{}\") at {}", command.cluster, command.queue, command.login.site);
 
     let response = client
         .post(&jobs_url)
-        .basic_auth(&command.user, Some(password))
+        .basic_auth(&command.login.user, Some(password))
         .json(&payload)
         .send()
         .await
@@ -322,7 +353,7 @@ async fn submit_job(command: &DeployG5kCommand, password: &str) -> anyhow::Resul
 
 async fn wait_for_job(command: &DeployG5kCommand, password: &str, job_id: u64) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
-    let job_url = format!("{G5K_API_URL}/sites/{}/jobs/{job_id}", command.site);
+    let job_url = format!("{G5K_API_URL}/sites/{}/jobs/{job_id}", command.login.site);
 
     let mut last_state = String::new();
     let mut failures = 0;
@@ -330,7 +361,7 @@ async fn wait_for_job(command: &DeployG5kCommand, password: &str, job_id: u64) -
     loop {
         sleep(JOB_POLL_INTERVAL).await;
 
-        let state = match fetch_job_state(&client, &job_url, &command.user, password).await {
+        let state = match fetch_job_state(&client, &job_url, &command.login.user, password).await {
             Ok(state) => {
                 failures = 0;
                 state

@@ -1,13 +1,13 @@
-use clap::{Parser, Subcommand};
-use clap_verbosity_flag::Verbosity;
-use strum::Display;
-use crate::args::deploy_g5k::DeployG5kCommand;
+use crate::args::g5k::G5kCommands;
 use crate::args::generate::GenerateCommand;
 use crate::args::plot::PlotCommand;
 use crate::args::run::RunCommand;
 use crate::models::hardware_resources::HardwareResources;
 use crate::models::nic::NicType;
 use crate::models::protocol::RoutingProtocol;
+use clap::{Parser, Subcommand};
+use clap_verbosity_flag::Verbosity;
+use strum::Display;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -27,10 +27,9 @@ pub enum Command {
     Run(RunCommand),
     /// Plot experiment results
     Plot(PlotCommand),
+    #[clap(subcommand)]
     /// Upload an OS image to Grid'5000 and reserve a node to run its experiment
-    #[command(name = "deploy_g5k", alias = "deploy-g5k")]
-    #[strum(serialize = "deploy_g5k")]
-    DeployG5k(DeployG5kCommand),
+    G5k(G5kCommands),
 }
 
 

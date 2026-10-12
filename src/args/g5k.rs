@@ -1,10 +1,16 @@
+use clap::Subcommand;
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum G5kCommands {
+    Deploy(DeployG5kCommand),
+    // Add command to harvest results from https://api.grid5000.fr/stable/sites/SITE/public/USER/results/ here
+    // apache web directory
+}
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct DeployG5kCommand {
-    /// Grid'5000 username
-    pub user: String,
-
-    /// Grid'5000 site (ex: nancy)
-    pub site: String,
+    #[clap(flatten)]
+    pub login: G5kLogin,
 
     /// Operating system name, as listed in "experimentation/operating_systems.toml"
     pub os: String,
@@ -21,12 +27,16 @@ pub struct DeployG5kCommand {
     #[arg(long)]
     pub walltime: Option<String>,
 
-    /// Script executed on the reserved node, called with the username and the OS name.
-    /// Defaults to "/home/<user>/run_benchmark.sh"
-    #[arg(long)]
-    pub script: Option<String>,
-
     /// Do not wait for the job to terminate after submitting it
     #[arg(long)]
     pub no_wait: bool,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct G5kLogin {
+    /// Grid'5000 username
+    pub user: String,
+
+    /// Grid'5000 site (ex: nancy)
+    pub site: String,
 }
