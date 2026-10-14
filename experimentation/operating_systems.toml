@@ -160,8 +160,6 @@ done""" },
     trigger_sequence = [
         { expect = "DHCPDISCOVER", control = "c" },
         { expect = "DHCPDISCOVER", control = "c" },
-        { expect = "DHCPDISCOVER", control = "c" },
-        { expect = "DHCPDISCOVER", control = "c" },
         { expect = "Waiting", control = "c" }
     ]
     input_ready = ":~"
@@ -175,7 +173,7 @@ done""" },
         ["VirtIO", "vtnet"]
     ]
     interfaces_start_at = 0
-    images_path = ["/home/julien/Programmation/vm/FreeBSD/FreeBSD-15.1-RELEASE-amd64-zfs.qcow2"]
+    images_path = ["/home/julien/Programmation/vm/FreeBSD/FreeBSD-15.1-RELEASE-amd64-zfs-portable.qcow2"]
     resources_monitor_commands = [
         "t=$(sysctl -n hw.physmem);p=$(sysctl -n hw.pagesize);f=$(sysctl -n vm.stats.vm.v_free_count);c=$(sysctl -n kern.cp_time);sleep 1;d=$(sysctl -n kern.cp_time)",
         """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
