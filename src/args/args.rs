@@ -8,6 +8,7 @@ use crate::models::protocol::RoutingProtocol;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use strum::Display;
+use crate::args::compute_results::ComputeResultsCommand;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -25,6 +26,8 @@ pub enum Command {
     Generate(GenerateCommand),
     /// Run experiment files
     Run(RunCommand),
+    /// Compte results
+    Compute(ComputeResultsCommand),
     /// Plot experiment results
     Plot(PlotCommand),
     #[clap(subcommand)]

@@ -1,25 +1,15 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command};
-use tracing::{info, warn};
-use crate::args::args::ExperimentSelectionArgs;
+use tracing::{info};
 use crate::args::plot::PlotCommand;
-use crate::models::experiment::Experiment;
-use crate::utils::files::experiments::parse_experiments_files;
 use crate::utils::files::plot_dir::PLOT_DIR_PATH;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
+use crate::utils::results::{extract_experiments_and_results, ExperimentAndResults};
 use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
 
 const TARGET: &str = "plot";
-
-#[derive(Debug)]
-struct ExperimentAndResults {
-    pub experiment: Experiment,
-    pub experiment_keywords: Vec<String>,
-    pub result_paths_per_test: HashMap<String, Vec<PathBuf>>,
-}
 
 struct Plot {
     pub plot_type: &'static str,
@@ -76,32 +66,8 @@ pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
         fs::create_dir(&plot_output_directory_path)?;
     }
 
-    add_flent_stats(&experiment_results)?;
     plot_flent(&plot_command, &plot_output_directory_path, &experiment_results, &common_words, non_common_words)?;
     plot_resources(&plot_output_directory_path, &experiment_results, &common_words)?;
-
-    Ok(())
-}
-
-fn add_flent_stats(experiment_results: &Vec<ExperimentAndResults>) -> anyhow::Result<()> {
-    for experiment in experiment_results {
-        for (_, result_paths) in &experiment.result_paths_per_test {
-            for result_path in result_paths {
-                let stats_path = result_path.with_extension("stats");
-
-                Command::new("flent")
-                    .arg("-f")
-                    .arg("stats")
-                    .arg("-i")
-                    .arg(result_path)
-                    .arg("-o")
-                    .arg(&stats_path)
-                    .spawn()?;
-
-                info!(target: TARGET, "Added Flent stats for result {}", result_path.display());
-            }
-        }
-    }
 
     Ok(())
 }
@@ -245,56 +211,6 @@ fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec
     Command::new("python").args(&args).spawn()?;
 
     Ok(())
-}
-
-fn extract_experiments_and_results(experiment_selection: &ExperimentSelectionArgs) -> anyhow::Result<Vec<ExperimentAndResults>> {
-    let experiments = parse_experiments_files(&experiment_selection)?;
-
-    let mut experiment_results: Vec<ExperimentAndResults> = Vec::new();
-
-    for experiment in experiments {
-        let mut result_paths = HashMap::new();
-
-        for test in &experiment.test_batch {
-            let result_dir_path = RESULT_DIR_PATH.join(&experiment.experiment_name).join(&test.name);
-
-            if !result_dir_path.exists() {
-                warn!(target: TARGET, "Result file for \"{}\" \"{}\" does not exist", &experiment.experiment_name, &test.name);
-                continue;
-            }
-
-            for file_path in result_dir_path.read_dir()? {
-                let file_path = file_path?;
-
-                if file_path.file_type()?.is_dir() {
-                    continue;
-                }
-
-                if let Some(extension) = file_path.path().to_str() && extension.ends_with(".flent.gz") {
-                    let entry = result_paths.entry(test.test.clone()).or_insert(Vec::new());
-                    entry.push(file_path.path())
-                }
-            }
-        }
-
-        if result_paths.is_empty() {
-            continue;
-        }
-
-        let experiment_keywords = experiment.experiment_name.split(',').map(|k| k.to_string()).collect();
-
-        let experiment_and_results = ExperimentAndResults {
-            experiment,
-            experiment_keywords,
-            result_paths_per_test: result_paths,
-        };
-
-        experiment_results.push(experiment_and_results);
-    }
-
-    experiment_results.sort_by(|a, b| a.experiment.experiment_name.cmp(&b.experiment.experiment_name));
-
-    Ok(experiment_results)
 }
 
 fn adjust_note(notes: &[&str], adjustment: i32) -> String {
