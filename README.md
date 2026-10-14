@@ -96,6 +96,17 @@ The plots are then stored in `./experimentation/plots/`
 
 WIP
 
+## Create ONIE and/or modified portable images
+
+1. Run the QEMU vm with multiple disks in GNS3
+2. Connect to the OS console and process to the OS installation or modification
+3. Once everything is set up as wanted, log out
+4. In GNS3 GUI, right-click on the router with your desired OS image. "Show in file manager"
+5. Localize the disk hosting the modified image (often `hda_disk.qcow2`)
+6. Commit the changed by using `qemu-img commit <hda_disk.qcow2>`
+7. Copy the commited image elsewhere
+8. Now, make it portable by using `qemu-img convert -f qcow2 -O qcow2 your-image.qcow2 your-portable-image.qcow2`
+
 ## Others
 
 ### Available experiments
@@ -183,25 +194,4 @@ from `flent --list-tests`
   voip                       :  VoIP one-way stream test
   voip-1up                   :  VoIP one-way stream test with competing TCP stream
   voip-rrul                  :  VoIP one-way stream test with competing RRUL test
-```
-
-### Available NICs
-
-from https://en.wikibooks.org/wiki/QEMU/Devices/Network
-
-```
-e1000, e1000e	  : 10/100/1000Mb/s Intel 82540em / PRO/1000
-i82550
-i82551            : 10/100Mb/s      Intel 10/100 Mbps Fast Ethernet
-i82557a,b,c       : 10/100Mb/s      Intel 10/100 Mbps Fast Ethernet
-i82558a           : 10/100Mb/s      Intel 10/100 Mbps Fast Ethernet
-i82559a,b,c,er    : 10/100Mb/s      Intel 10/100 Mbps Fast Ethernet
-i82562
-i82801
-igb
-ne2k_pci          : 10Mb/s          RTL8029 - NE2000 PCI
-pcnet             : 10/100Mb/s      AMD PCnet FAST III Ethernet
-rocker
-rtl8139           : 10/100Mb/s      Realtek Fast Ethernet
-virtio-net-pci    : 1Gb/s           Virtual High Performance Ethernet card
 ```
