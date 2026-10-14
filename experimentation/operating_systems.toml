@@ -95,7 +95,7 @@ done""",
     interface_prefix = "1/1/"
     interfaces_start_at = 0
     images_path = [
-        "/home/julien/Programmation/vm/DNOS10/OS10_10.6.1.3.124V.qcow2",
+        "/home/julien/Programmation/vm/DNOS10/OS10_10.6.1.3.124V-portable.qcow2",
     ]
     resources_monitor_commands = [
         { expect = ":~" , send = """printf "Total (MiB)\\tFree (MiB)\\tUsed (MiB)\\tCPU (perc)\\n" &&
