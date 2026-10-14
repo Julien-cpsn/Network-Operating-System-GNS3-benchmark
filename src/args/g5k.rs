@@ -3,7 +3,7 @@ use clap::Subcommand;
 #[derive(Debug, Clone, Subcommand)]
 pub enum G5kCommands {
     Deploy(DeployG5kCommand),
-    // Todo: HERE
+    Harvest(HarvestG5kCommand),
 }
 
 #[derive(Debug, Clone, clap::Args)]
@@ -29,6 +29,12 @@ pub struct DeployG5kCommand {
     /// Do not wait for the job to terminate after submitting it
     #[arg(long)]
     pub no_wait: bool,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct HarvestG5kCommand {
+    #[clap(flatten)]
+    pub login: G5kLogin,
 }
 
 #[derive(Debug, Clone, clap::Args)]

@@ -3,7 +3,6 @@ pub(crate) mod utils;
 pub(crate) mod args;
 pub(crate) mod commands;
 
-use crate::commands::g5k::deploy_g5k;
 use crate::commands::generate::generate;
 use crate::commands::run::run;
 use tracing::{info};
@@ -14,6 +13,8 @@ use futures::{FutureExt};
 use crate::args::args::{Args, Command};
 use crate::args::g5k::G5kCommands;
 use crate::args::generate::GenerateSubcommand;
+use crate::commands::g5k::deploy::deploy_g5k;
+use crate::commands::g5k::harvest::harvest_g5k;
 use crate::commands::plot::plot;
 use crate::utils::log::setup_global_logger;
 
@@ -50,6 +51,7 @@ async fn handle_command(command: &Command) -> anyhow::Result<()> {
         Command::Plot(plot_command) => plot(plot_command.clone())?,
         Command::G5k(g5k_command) => match g5k_command {
             G5kCommands::Deploy(deploy_command) => deploy_g5k(deploy_command.clone()).await?,
+            G5kCommands::Harvest(harvest_command) => harvest_g5k(harvest_command.clone()).await?,
         }
     }
 
