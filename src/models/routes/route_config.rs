@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use crate::models::protocol::RoutingProtocol;
 use crate::models::routes::bgp_config::BgpConfig;
@@ -12,17 +13,27 @@ pub enum RouteConfig {
     Rip(RipConfig),
     Ospf(OspfConfig),
     Bgp(BgpConfig),
-    Mpls
+    Mpls,
+    Mixed(IndexMap<RoutingProtocol, RouteConfig>)
 }
 
 impl RouteConfig {
+    /*
     pub fn to_protocol_name(&self) -> RoutingProtocol {
         match self {
             RouteConfig::Static(_) => RoutingProtocol::Static,
             RouteConfig::Rip(_) => RoutingProtocol::Rip,
             RouteConfig::Ospf(_) => RoutingProtocol::Ospf,
             RouteConfig::Bgp(_) => RoutingProtocol::Bgp,
-            RouteConfig::Mpls => RoutingProtocol::Mpls
+            RouteConfig::Mpls => RoutingProtocol::Mpls,
+            RouteConfig::Mixed(_) => RoutingProtocol::Mixed
+        }
+    }*/
+
+    pub fn unwrap_mixed(&self) -> &IndexMap<RoutingProtocol, RouteConfig> {
+        match self {
+            RouteConfig::Mixed(mixed) => mixed,
+            _ => unreachable!(),
         }
     }
 }

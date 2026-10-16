@@ -1,3 +1,5 @@
+# ===== Simple =====
+
 [Simple]
     supported_routing_protocols = ["static", "RIP", "OSPF"]
     failure_events = []
@@ -32,13 +34,10 @@
             { distant_network = "10.0.1.0/24", gateway = "10.0.1.1", interface = 3 },
             { distant_network = "10.0.2.0/24", gateway = "10.0.2.1", interface = 4 },
         ],
-
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.1.0/24", "10.0.2.0/24"]
         },
-
-
         OSPF = {
             router_id = "1.1.1.1",
             areas_to_add = {
@@ -50,6 +49,8 @@
             ]
         }
     }
+
+# ===== Double =====
 
 [Double]
     supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
@@ -87,7 +88,6 @@
         static = [
             { distant_network = "10.0.3.0/24", gateway = "10.0.2.2", interface = 4 },
         ],
-
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.1.0/24", "10.0.2.0/24"]
@@ -105,7 +105,7 @@
         BGP = {
             local_as = 1,
             neighbors = [
-                { address = "10.0.2.2", remote_as = 2 }
+                { address = "10.0.2.2", remote_as = 2, next_hop_self = false }
             ],
             networks_to_advertise = ["10.0.1.0/24"]
         }
@@ -120,7 +120,6 @@
         static = [
             { distant_network = "10.0.1.0/24", gateway = "10.0.2.1", interface = 3 },
         ],
-
         RIP = {
             interfaces_to_enable = [3, 4],
             networks_to_add = ["10.0.2.0/24", "10.0.3.0/24"]
@@ -138,8 +137,822 @@
         BGP = {
             local_as = 2,
             neighbors = [
-                { address = "10.0.2.1", remote_as = 1 }
+                { address = "10.0.2.1", remote_as = 1, next_hop_self = false }
             ],
             networks_to_advertise = ["10.0.3.0/24"]
+        }
+    }
+
+# ===== Multi-operator =====
+
+[Multi-operator]
+    # 4 ASes (AS65001..AS65004), each a ring of 4 routers: R1 - R2 - R3 - R4 - R1.
+    # R1 = ingress border router (towards Client), R3 = egress border router (towards Server).
+    # Addressing: intra-AS link i of AS n = 10.n.i.0/24 ; inter-AS link AS n <-> AS n+1 = 172.16.<n><n+1>.0/24
+    supported_routing_protocols = ["static", "RIP", "OSPF", "Mixed"]
+    failure_events = [
+        #{ type = "link", link_index = 6, happens_at = 30 }  # AS2 R1 <-> AS2 R2: OSPF/RIP/eBGP+OSPF reroute via AS2 R4
+    ]
+
+    [Multi-operator.network]
+    physical_links = [
+        { node_a = "Client", adapter_a = 0, node_b = "AS1 Router 1", adapter_b = 5 },  # [0] Client <-> AS1
+        { node_a = "AS1 Router 1", adapter_a = 3, node_b = "AS1 Router 2", adapter_b = 3 },  # [1] AS1 R1 <-> R2
+        { node_a = "AS1 Router 2", adapter_a = 4, node_b = "AS1 Router 3", adapter_b = 3 },  # [2] AS1 R2 <-> R3
+        { node_a = "AS1 Router 3", adapter_a = 4, node_b = "AS1 Router 4", adapter_b = 3 },  # [3] AS1 R3 <-> R4
+        { node_a = "AS1 Router 1", adapter_a = 4, node_b = "AS1 Router 4", adapter_b = 4 },  # [4] AS1 R1 <-> R4
+        { node_a = "AS1 Router 3", adapter_a = 5, node_b = "AS2 Router 1", adapter_b = 5 },  # [5] AS1 <-> AS2
+        { node_a = "AS2 Router 1", adapter_a = 3, node_b = "AS2 Router 2", adapter_b = 3 },  # [6] AS2 R1 <-> R2
+        { node_a = "AS2 Router 2", adapter_a = 4, node_b = "AS2 Router 3", adapter_b = 3 },  # [7] AS2 R2 <-> R3
+        { node_a = "AS2 Router 3", adapter_a = 4, node_b = "AS2 Router 4", adapter_b = 3 },  # [8] AS2 R3 <-> R4
+        { node_a = "AS2 Router 1", adapter_a = 4, node_b = "AS2 Router 4", adapter_b = 4 },  # [9] AS2 R1 <-> R4
+        { node_a = "AS2 Router 3", adapter_a = 5, node_b = "AS3 Router 1", adapter_b = 5 },  # [10] AS2 <-> AS3
+        { node_a = "AS3 Router 1", adapter_a = 3, node_b = "AS3 Router 2", adapter_b = 3 },  # [11] AS3 R1 <-> R2
+        { node_a = "AS3 Router 2", adapter_a = 4, node_b = "AS3 Router 3", adapter_b = 3 },  # [12] AS3 R2 <-> R3
+        { node_a = "AS3 Router 3", adapter_a = 4, node_b = "AS3 Router 4", adapter_b = 3 },  # [13] AS3 R3 <-> R4
+        { node_a = "AS3 Router 1", adapter_a = 4, node_b = "AS3 Router 4", adapter_b = 4 },  # [14] AS3 R1 <-> R4
+        { node_a = "AS3 Router 3", adapter_a = 5, node_b = "AS4 Router 1", adapter_b = 5 },  # [15] AS3 <-> AS4
+        { node_a = "AS4 Router 1", adapter_a = 3, node_b = "AS4 Router 2", adapter_b = 3 },  # [16] AS4 R1 <-> R2
+        { node_a = "AS4 Router 2", adapter_a = 4, node_b = "AS4 Router 3", adapter_b = 3 },  # [17] AS4 R2 <-> R3
+        { node_a = "AS4 Router 3", adapter_a = 4, node_b = "AS4 Router 4", adapter_b = 3 },  # [18] AS4 R3 <-> R4
+        { node_a = "AS4 Router 1", adapter_a = 4, node_b = "AS4 Router 4", adapter_b = 4 },  # [19] AS4 R1 <-> R4
+        { node_a = "Server", adapter_a = 0, node_b = "AS4 Router 3", adapter_b = 5 },  # [20] AS4 <-> Server
+    ]
+
+    [Multi-operator.network.nodes.Client]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.1.2/24"
+    x = -650
+    y = 0
+
+    [Multi-operator.network.nodes.Server]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.2.2/24"
+    x = 650
+    y = 0
+
+    [Multi-operator.network.nodes."AS1 Router 1"]
+    number_nics = 6
+    ips = { 3 = "10.1.1.1/24", 4 = "10.1.4.1/24", 5 = "10.0.1.1/24" }
+    x = -525
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.2.0/24", gateway = "10.1.1.2", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.1.1.0/24", "10.1.4.0/24", "10.0.1.0/24"]
+        },
+        OSPF = {
+            router_id = "1.0.0.1",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.1.1.0/24", area = 0 },
+                { network = "10.1.4.0/24", area = 0 },
+                { network = "10.0.1.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "1.0.0.1",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.1.1.0/24", area = 0 },
+                    { network = "10.1.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65001,
+                neighbors = [
+                    { address = "10.1.1.2", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.2.2", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.4.2", remote_as = 65001, next_hop_self = true }
+                ],
+                networks_to_advertise = ["10.0.1.0/24"]
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS1 Router 2"]
+    number_nics = 6
+    ips = { 3 = "10.1.1.2/24", 4 = "10.1.2.1/24" }
+    x = -450
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.1.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.1.2.2", interface = 4 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.1.1.0/24", "10.1.2.0/24"]
+        },
+        OSPF = {
+            router_id = "1.0.0.2",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.1.1.0/24", area = 0 },
+                { network = "10.1.2.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "1.0.0.2",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.1.1.0/24", area = 0 },
+                    { network = "10.1.2.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65001,
+                neighbors = [
+                    { address = "10.1.1.1", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.2.2", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.3.2", remote_as = 65001, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS1 Router 3"]
+    number_nics = 6
+    ips = { 3 = "10.1.2.2/24", 4 = "10.1.3.1/24", 5 = "172.16.12.1/24" }
+    x = -375
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.2.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "172.16.12.2", interface = 5 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.1.2.0/24", "10.1.3.0/24", "172.16.12.0/24"]
+        },
+        OSPF = {
+            router_id = "1.0.0.3",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.1.2.0/24", area = 0 },
+                { network = "10.1.3.0/24", area = 0 },
+                { network = "172.16.12.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "1.0.0.3",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.1.2.0/24", area = 0 },
+                    { network = "10.1.3.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65001,
+                neighbors = [
+                    { address = "10.1.1.1", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.2.1", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.3.2", remote_as = 65001, next_hop_self = true },
+                    { address = "172.16.12.2", remote_as = 65002, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS1 Router 4"]
+    number_nics = 6
+    ips = { 3 = "10.1.3.2/24", 4 = "10.1.4.2/24" }
+    x = -450
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.4.1", interface = 4 },
+            { distant_network = "10.0.2.0/24", gateway = "10.1.3.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.1.3.0/24", "10.1.4.0/24"]
+        },
+        OSPF = {
+            router_id = "1.0.0.4",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.1.3.0/24", area = 0 },
+                { network = "10.1.4.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "1.0.0.4",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.1.3.0/24", area = 0 },
+                    { network = "10.1.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65001,
+                neighbors = [
+                    { address = "10.1.4.1", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.2.1", remote_as = 65001, next_hop_self = true },
+                    { address = "10.1.3.1", remote_as = 65001, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS2 Router 1"]
+    number_nics = 6
+    ips = { 3 = "10.2.1.1/24", 4 = "10.2.4.1/24", 5 = "172.16.12.2/24" }
+    x = -225
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "172.16.12.1", interface = 5 },
+            { distant_network = "10.0.2.0/24", gateway = "10.2.1.2", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.2.1.0/24", "10.2.4.0/24", "172.16.12.0/24"]
+        },
+        OSPF = {
+            router_id = "2.0.0.1",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.2.1.0/24", area = 0 },
+                { network = "10.2.4.0/24", area = 0 },
+                { network = "172.16.12.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "2.0.0.1",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.2.1.0/24", area = 0 },
+                    { network = "10.2.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65002,
+                neighbors = [
+                    { address = "10.2.1.2", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.2.2", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.4.2", remote_as = 65002, next_hop_self = true },
+                    { address = "172.16.12.1", remote_as = 65001, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS2 Router 2"]
+    number_nics = 6
+    ips = { 3 = "10.2.1.2/24", 4 = "10.2.2.1/24" }
+    x = -150
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.2.1.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.2.2.2", interface = 4 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.2.1.0/24", "10.2.2.0/24"]
+        },
+        OSPF = {
+            router_id = "2.0.0.2",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.2.1.0/24", area = 0 },
+                { network = "10.2.2.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "2.0.0.2",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.2.1.0/24", area = 0 },
+                    { network = "10.2.2.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65002,
+                neighbors = [
+                    { address = "10.2.1.1", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.2.2", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.3.2", remote_as = 65002, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS2 Router 3"]
+    number_nics = 6
+    ips = { 3 = "10.2.2.2/24", 4 = "10.2.3.1/24", 5 = "172.16.23.1/24" }
+    x = -75
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.2.2.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "172.16.23.2", interface = 5 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.2.2.0/24", "10.2.3.0/24", "172.16.23.0/24"]
+        },
+        OSPF = {
+            router_id = "2.0.0.3",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.2.2.0/24", area = 0 },
+                { network = "10.2.3.0/24", area = 0 },
+                { network = "172.16.23.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "2.0.0.3",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.2.2.0/24", area = 0 },
+                    { network = "10.2.3.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65002,
+                neighbors = [
+                    { address = "10.2.1.1", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.2.1", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.3.2", remote_as = 65002, next_hop_self = true },
+                    { address = "172.16.23.2", remote_as = 65003, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS2 Router 4"]
+    number_nics = 6
+    ips = { 3 = "10.2.3.2/24", 4 = "10.2.4.2/24" }
+    x = -150
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.2.4.1", interface = 4 },
+            { distant_network = "10.0.2.0/24", gateway = "10.2.3.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.2.3.0/24", "10.2.4.0/24"]
+        },
+        OSPF = {
+            router_id = "2.0.0.4",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.2.3.0/24", area = 0 },
+                { network = "10.2.4.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "2.0.0.4",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.2.3.0/24", area = 0 },
+                    { network = "10.2.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65002,
+                neighbors = [
+                    { address = "10.2.4.1", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.2.1", remote_as = 65002, next_hop_self = true },
+                    { address = "10.2.3.1", remote_as = 65002, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS3 Router 1"]
+    number_nics = 6
+    ips = { 3 = "10.3.1.1/24", 4 = "10.3.4.1/24", 5 = "172.16.23.2/24" }
+    x = 75
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "172.16.23.1", interface = 5 },
+            { distant_network = "10.0.2.0/24", gateway = "10.3.1.2", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.3.1.0/24", "10.3.4.0/24", "172.16.23.0/24"]
+        },
+        OSPF = {
+            router_id = "3.0.0.1",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.3.1.0/24", area = 0 },
+                { network = "10.3.4.0/24", area = 0 },
+                { network = "172.16.23.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "3.0.0.1",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.3.1.0/24", area = 0 },
+                    { network = "10.3.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65003,
+                neighbors = [
+                    { address = "10.3.1.2", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.2.2", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.4.2", remote_as = 65003, next_hop_self = true },
+                    { address = "172.16.23.1", remote_as = 65002, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS3 Router 2"]
+    number_nics = 6
+    ips = { 3 = "10.3.1.2/24", 4 = "10.3.2.1/24" }
+    x = 150
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.3.1.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.3.2.2", interface = 4 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.3.1.0/24", "10.3.2.0/24"]
+        },
+        OSPF = {
+            router_id = "3.0.0.2",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.3.1.0/24", area = 0 },
+                { network = "10.3.2.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "3.0.0.2",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.3.1.0/24", area = 0 },
+                    { network = "10.3.2.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65003,
+                neighbors = [
+                    { address = "10.3.1.1", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.2.2", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.3.2", remote_as = 65003, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS3 Router 3"]
+    number_nics = 6
+    ips = { 3 = "10.3.2.2/24", 4 = "10.3.3.1/24", 5 = "172.16.34.1/24" }
+    x = 225
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.3.2.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "172.16.34.2", interface = 5 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.3.2.0/24", "10.3.3.0/24", "172.16.34.0/24"]
+        },
+        OSPF = {
+            router_id = "3.0.0.3",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.3.2.0/24", area = 0 },
+                { network = "10.3.3.0/24", area = 0 },
+                { network = "172.16.34.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "3.0.0.3",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.3.2.0/24", area = 0 },
+                    { network = "10.3.3.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65003,
+                neighbors = [
+                    { address = "10.3.1.1", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.2.1", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.3.2", remote_as = 65003, next_hop_self = true },
+                    { address = "172.16.34.2", remote_as = 65004, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS3 Router 4"]
+    number_nics = 6
+    ips = { 3 = "10.3.3.2/24", 4 = "10.3.4.2/24" }
+    x = 150
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.3.4.1", interface = 4 },
+            { distant_network = "10.0.2.0/24", gateway = "10.3.3.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.3.3.0/24", "10.3.4.0/24"]
+        },
+        OSPF = {
+            router_id = "3.0.0.4",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.3.3.0/24", area = 0 },
+                { network = "10.3.4.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "3.0.0.4",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.3.3.0/24", area = 0 },
+                    { network = "10.3.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65003,
+                neighbors = [
+                    { address = "10.3.4.1", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.2.1", remote_as = 65003, next_hop_self = true },
+                    { address = "10.3.3.1", remote_as = 65003, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS4 Router 1"]
+    number_nics = 6
+    ips = { 3 = "10.4.1.1/24", 4 = "10.4.4.1/24", 5 = "172.16.34.2/24" }
+    x = 375
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "172.16.34.1", interface = 5 },
+            { distant_network = "10.0.2.0/24", gateway = "10.4.1.2", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.4.1.0/24", "10.4.4.0/24", "172.16.34.0/24"]
+        },
+        OSPF = {
+            router_id = "4.0.0.1",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.4.1.0/24", area = 0 },
+                { network = "10.4.4.0/24", area = 0 },
+                { network = "172.16.34.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "4.0.0.1",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.4.1.0/24", area = 0 },
+                    { network = "10.4.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65004,
+                neighbors = [
+                    { address = "10.4.1.2", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.2.2", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.4.2", remote_as = 65004, next_hop_self = true },
+                    { address = "172.16.34.1", remote_as = 65003, next_hop_self = false }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS4 Router 2"]
+    number_nics = 6
+    ips = { 3 = "10.4.1.2/24", 4 = "10.4.2.1/24" }
+    x = 450
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.4.1.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.4.2.2", interface = 4 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.4.1.0/24", "10.4.2.0/24"]
+        },
+        OSPF = {
+            router_id = "4.0.0.2",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.4.1.0/24", area = 0 },
+                { network = "10.4.2.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "4.0.0.2",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.4.1.0/24", area = 0 },
+                    { network = "10.4.2.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65004,
+                neighbors = [
+                    { address = "10.4.1.1", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.2.2", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.3.2", remote_as = 65004, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS4 Router 3"]
+    number_nics = 6
+    ips = { 3 = "10.4.2.2/24", 4 = "10.4.3.1/24", 5 = "10.0.2.1/24" }
+    x = 525
+    y = 0
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.4.2.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.4.2.0/24", "10.4.3.0/24", "10.0.2.0/24"]
+        },
+        OSPF = {
+            router_id = "4.0.0.3",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.4.2.0/24", area = 0 },
+                { network = "10.4.3.0/24", area = 0 },
+                { network = "10.0.2.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "4.0.0.3",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.4.2.0/24", area = 0 },
+                    { network = "10.4.3.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65004,
+                neighbors = [
+                    { address = "10.4.1.1", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.2.1", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.3.2", remote_as = 65004, next_hop_self = true }
+                ],
+                networks_to_advertise = ["10.0.2.0/24"]
+            }
+        }
+    }
+
+    [Multi-operator.network.nodes."AS4 Router 4"]
+    number_nics = 6
+    ips = { 3 = "10.4.3.2/24", 4 = "10.4.4.2/24" }
+    x = 450
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.4.4.1", interface = 4 },
+            { distant_network = "10.0.2.0/24", gateway = "10.4.3.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.4.3.0/24", "10.4.4.0/24"]
+        },
+        OSPF = {
+            router_id = "4.0.0.4",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.4.3.0/24", area = 0 },
+                { network = "10.4.4.0/24", area = 0 }
+            ]
+        },
+        Mixed = {
+            OSPF = {
+                router_id = "4.0.0.4",
+                areas_to_add = {
+                    0 = [3, 4]
+                },
+                networks_to_add = [
+                    { network = "10.4.3.0/24", area = 0 },
+                    { network = "10.4.4.0/24", area = 0 }
+                ]
+            },
+            BGP = {
+                local_as = 65004,
+                neighbors = [
+                    { address = "10.4.4.1", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.2.1", remote_as = 65004, next_hop_self = true },
+                    { address = "10.4.3.1", remote_as = 65004, next_hop_self = true }
+                ],
+                networks_to_advertise = []
+            }
         }
     }

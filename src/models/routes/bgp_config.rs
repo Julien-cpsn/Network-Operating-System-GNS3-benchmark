@@ -13,4 +13,5 @@ pub struct BgpConfig {
 pub struct BgpNeighbor {
     pub address: Ipv4Addr,
     pub remote_as: u32,
+    pub next_hop_self: bool,
 }

@@ -50,6 +50,7 @@ fn router_add_bgp_neighbor_commands(command_context: &CommandContext, bgp_comman
     let mut to_replace = command_context.to_replace_map(None)?;
     to_replace.insert(String::from("{NEIGHBOR_ADDRESS}"), bgp_neighbor.address.to_string());
     to_replace.insert(String::from("{REMOTE_AS}"), bgp_neighbor.remote_as.to_string());
+    to_replace.insert(String::from("{NEXT_HOP_SELF}"), bgp_neighbor.next_hop_self.to_string());
 
     for add_neighbor in &bgp_commands.add_neighbor {
         if let Some(command) = add_neighbor.to_os_command(&command_context, Some(&to_replace)) {

@@ -43,7 +43,7 @@ use crate::utils::os_commands::router::{router_add_ip_address_commands, router_l
 use crate::utils::os_commands::routing::bpg_config::router_configure_bgp_commands;
 use crate::utils::os_commands::routing::ospf_config::router_configure_ospf_commands;
 use crate::utils::os_commands::routing::rip_config::router_configure_rip_commands;
-use crate::utils::os_commands::routing::static_route::router_add_static_route_commands;
+use crate::utils::os_commands::routing::static_route::router_configure_static_commands;
 use crate::utils::route::generate_distant_network_from_test;
 use crate::utils::test::{clear_shared_dir, harvest_results, test_task};
 use crate::utils::utils::{filter_guests, filter_guests_mut, filter_routers, filter_routers_mut};
@@ -321,10 +321,7 @@ pub async fn run_experiment(
         }
 
         if let RouteConfig::Static(static_routes) = &router.routes_config {
-            for static_route in static_routes {
-                let nic = router.nics.get(static_route.interface.to_string().as_str()).ok_or_else(|| anyhow!("NIC index {} found in router \"{}\"", &static_route.interface, &router_name))?;
-                static_routes_commands.extend(router_add_static_route_commands(&command_context, &static_route, &nic.nic_type)?);
-            }
+            static_routes_commands.extend(router_configure_static_commands(&command_context, &static_routes)?);
         }
 
         // Routing stack setup
@@ -350,8 +347,26 @@ pub async fn run_experiment(
                 RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&command_context, &ospf_config)?,
                 RouteConfig::Bgp(bgp_config) => router_configure_bgp_commands(&command_context, &bgp_config)?,
                 RouteConfig::Mpls => Vec::new(),
+                RouteConfig::Mixed(mixed_config) => {
+                    let mut commands = Vec::new();
+
+                    for config in mixed_config.values() {
+                        let c = match config {
+                            RouteConfig::Static(static_config) => router_configure_static_commands(&command_context, &static_config)?,
+                            RouteConfig::Rip(rip_config) => router_configure_rip_commands(&command_context, &rip_config)?,
+                            RouteConfig::Ospf(ospf_config) => router_configure_ospf_commands(&command_context, &ospf_config)?,
+                            RouteConfig::Bgp(bgp_config) => router_configure_bgp_commands(&command_context, &bgp_config)?,
+                            RouteConfig::Mpls => Vec::new(),
+                            RouteConfig::Mixed(_) => panic!("Mixed protocol recursion"),
+                        };
+
+                        commands.extend(c);
+                    }
+
+                    commands
+                }
                 // Handled before
-                RouteConfig::Static(_) => Vec::new()
+                RouteConfig::Static(_) => Vec::new(),
             }
         };
 

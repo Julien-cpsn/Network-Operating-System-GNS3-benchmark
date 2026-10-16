@@ -7,6 +7,8 @@ use crate::utils::os_commands::utils::format_command;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
+use crate::models::protocol::RoutingProtocol;
+use crate::models::routes::route_config::RouteConfig;
 
 #[derive(Debug, Clone)]
 pub struct OsCommand {
@@ -118,8 +120,19 @@ impl DeserializedOsCommandType {
             },
             DeserializedOsCommandType::Other(command) => {
                 for (key, value) in &command.assert_true {
-                    let context_map = context.to_key_value();
-                    
+                    let mut context_map = context.to_key_value();
+
+                    if let Some(to_replace) = to_replace {
+                        for (to_replace_key, to_replace_value) in to_replace {
+                            // Removes the { } in the key
+                            let adjusted_key = &to_replace_key[1..to_replace_key.len()-1];
+
+                            if !context_map.contains_key(adjusted_key) {
+                                context_map.insert(adjusted_key, to_replace_value.to_owned());
+                            }
+                        }
+                    }
+
                     if let Some(value_to_check) = context_map.get(key.as_str()) {
                         if value_to_check != value {
                             return None;
@@ -196,7 +209,42 @@ impl CommandContext<'_> {
         map.insert("GAP_BETWEEN_INTERFACES", self.os.gap_between_interfaces.to_string());
 
         map.insert("ROUTER_ID", self.router.id.clone());
-        map.insert("ROUTING_PROTOCOL", self.router.routes_config.to_protocol_name().to_string());
+
+        let mut routing_protocol_static = false;
+        let mut routing_protocol_rip = false;
+        let mut routing_protocol_ospf = false;
+        let mut routing_protocol_bgp = false;
+        let mut routing_protocol_mpls = false;
+        let mut routing_protocol_mixed = false;
+
+        match &self.router.routes_config {
+            RouteConfig::Static(_) => routing_protocol_static = true,
+            RouteConfig::Rip(_) => routing_protocol_rip = true,
+            RouteConfig::Ospf(_) => routing_protocol_ospf = true,
+            RouteConfig::Bgp(_) => routing_protocol_bgp = true,
+            RouteConfig::Mpls => routing_protocol_mpls = true,
+            RouteConfig::Mixed(mixed) => {
+                routing_protocol_mixed = true;
+
+                for routing_protocol in mixed.keys() {
+                    match routing_protocol {
+                        RoutingProtocol::Static => routing_protocol_static = true,
+                        RoutingProtocol::Rip => routing_protocol_rip = true,
+                        RoutingProtocol::Ospf => routing_protocol_ospf = true,
+                        RoutingProtocol::Bgp => routing_protocol_bgp = true,
+                        RoutingProtocol::Mpls => routing_protocol_mpls = true,
+                        RoutingProtocol::Mixed => panic!("Mixed protocol recursion"),
+                    };
+                }
+            }
+        }
+
+        map.insert("ROUTING_PROTOCOL_STATIC", routing_protocol_static.to_string());
+        map.insert("ROUTING_PROTOCOL_RIP", routing_protocol_rip.to_string());
+        map.insert("ROUTING_PROTOCOL_OSPF", routing_protocol_ospf.to_string());
+        map.insert("ROUTING_PROTOCOL_BGP", routing_protocol_bgp.to_string());
+        map.insert("ROUTING_PROTOCOL_MPLS", routing_protocol_mpls.to_string());
+        map.insert("ROUTING_PROTOCOL_MIXED", routing_protocol_mixed.to_string());
 
         map
     }

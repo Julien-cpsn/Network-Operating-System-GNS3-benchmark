@@ -1,13 +1,27 @@
-use crate::models::nic::NicType;
 use crate::models::os_command::{CommandContext, OsCommand};
 use crate::models::routes::static_route::StaticRoute;
+use anyhow::anyhow;
 
-pub fn router_add_static_route_commands(command_context: &CommandContext, static_route: &StaticRoute, nic_type: &NicType) -> anyhow::Result<Vec<OsCommand>> {
+pub fn router_configure_static_commands(command_context: &CommandContext, static_route: &Vec<StaticRoute>) -> anyhow::Result<Vec<OsCommand>> {
+    let mut static_routes_commands = Vec::new();
+
+    for static_route in static_route {
+        static_routes_commands.extend(router_add_static_route_commands(&command_context, &static_route)?);
+    }
+
+    Ok(static_routes_commands)
+}
+
+fn router_add_static_route_commands(command_context: &CommandContext, static_route: &StaticRoute) -> anyhow::Result<Vec<OsCommand>> {
+    let nic = command_context.router.nics
+        .get(static_route.interface.to_string().as_str()).
+        ok_or_else(|| anyhow!("NIC index {} found in router \"{}\"", &static_route.interface, &command_context.router_name))?;
+
     let mut commands = Vec::new();
 
     let interface_index =  command_context.os.gap_between_interfaces * (command_context.os.interfaces_start_at + static_route.interface as i16) as u16;
 
-    let mut to_replace = command_context.to_replace_map(Some(&nic_type))?;
+    let mut to_replace = command_context.to_replace_map(Some(&nic.nic_type))?;
     to_replace.insert(String::from("{DISTANT_NETWORK}"), static_route.distant_network.to_string());
     to_replace.insert(String::from("{GATEWAY}"), static_route.gateway.to_string());
     to_replace.insert(String::from("{INTERFACE}"), interface_index.to_string());

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::exit;
@@ -98,7 +99,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                     for (topology_name, topology) in &topologies_to_use {
                         let topology_dir = create_dir_if_does_not_exist(nic_dir.join(topology_name))?;
 
-                        for routing_protocol in &topology.supported_routing_protocols {
+                        'routing_protocol: for routing_protocol in &topology.supported_routing_protocols {
                             if routing_protocol != &RoutingProtocol::Static {
                                 if let Some(routing_stack_name) = &os.routing_stack {
                                     let routing_stack = routing_stack_list.get(routing_stack_name).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?;
@@ -109,6 +110,26 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                         RoutingProtocol::Ospf if routing_stack.ospf.is_none() => continue,
                                         RoutingProtocol::Bgp if routing_stack.bgp.is_none() => continue,
                                         RoutingProtocol::Mpls if routing_stack.mpls.is_none() => continue,
+                                        RoutingProtocol::Mixed => {
+                                            let protocols_to_use = topology.network.nodes
+                                                .iter()
+                                                .filter_map(|(_,n)| n.node_type.get_router())
+                                                .filter_map(|r| r.routes_config.get(&RoutingProtocol::Mixed))
+                                                .map(|r| r.unwrap_mixed().keys().collect::<Vec<_>>())
+                                                .flatten()
+                                                .collect::<HashSet<_>>();
+
+                                            for protocol in protocols_to_use {
+                                                match protocol {
+                                                    RoutingProtocol::Rip if routing_stack.rip.is_none() => continue 'routing_protocol,
+                                                    RoutingProtocol::Ospf if routing_stack.ospf.is_none() => continue 'routing_protocol,
+                                                    RoutingProtocol::Bgp if routing_stack.bgp.is_none() => continue 'routing_protocol,
+                                                    RoutingProtocol::Mpls if routing_stack.mpls.is_none() => continue 'routing_protocol,
+                                                    RoutingProtocol::Mixed => panic!("Mixed protocol recursion"),
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
                                         _ => {}
                                     }
                                 }

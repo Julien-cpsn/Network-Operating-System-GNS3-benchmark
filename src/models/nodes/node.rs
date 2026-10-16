@@ -70,3 +70,20 @@ pub enum GenericNodeType {
     Guest(GenericGuest),
     Router(GenericRouter),
 }
+
+impl GenericNodeType {
+    /*
+    pub fn get_guest(&self) -> Option<&GenericGuest> {
+        match &self {
+            GenericNodeType::Guest(guest) => Some(guest),
+            GenericNodeType::Router(_) => None
+        }
+    }*/
+
+    pub fn get_router(&self) -> Option<&GenericRouter> {
+        match &self {
+            GenericNodeType::Guest(_) => None,
+            GenericNodeType::Router(router) => Some(router)
+        }
+    }
+}

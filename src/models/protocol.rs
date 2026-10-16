@@ -23,5 +23,9 @@ pub enum RoutingProtocol {
     #[clap(name = "MPLS")]
     #[strum(to_string = "MPLS")]
     #[serde(alias = "mpls", alias = "MPLS")]
-    Mpls
+    Mpls,
+    #[clap(name = "mixed")]
+    #[strum(to_string = "Mixed")]
+    #[serde(alias = "mixed", alias = "Mixed", alias = "MIXED")]
+    Mixed
 }
