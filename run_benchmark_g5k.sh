@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 USER="$1"
-OS="$2"
 
 set -e
 
@@ -42,7 +41,6 @@ sleep 2
 
 rm -rf experimentation/results/*
 
-cargo run -- generate commands --os "${OS}" -q > run_experiment.sh
 chmod +x run_experiment.sh
 ./run_experiment.sh
 
@@ -50,11 +48,6 @@ if [ ! -d "/home/${USER}/public/results" ]; then
         mkdir "/home/${USER}/public/results"
 fi
 
-find experimentation/results \
-    -mindepth 1 \
-    -maxdepth 2 \
-    -type d \
-    -name "*${OS}*" \
-    -exec cp -r "{}" "/home/${USER}/public/results" \;
+cp -r "experimentation/results" "/home/${USER}/public/"
 
 echo DONE

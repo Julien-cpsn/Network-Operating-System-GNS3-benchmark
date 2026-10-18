@@ -26,7 +26,7 @@ pub enum Command {
     Generate(GenerateCommand),
     /// Run experiment files
     Run(RunCommand),
-    /// Compte results
+    /// Compute results before plotting
     Compute(ComputeResultsCommand),
     /// Plot experiment results
     Plot(PlotCommand),
