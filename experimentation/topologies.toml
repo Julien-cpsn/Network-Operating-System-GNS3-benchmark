@@ -1093,3 +1093,259 @@
             }
         }
     }
+
+# ===== Datacenter =====
+
+[Datacenter]
+    # 2-tier Clos (spine-leaf): 2 spines, 4 leaves (= racks), every leaf connected to every spine, no spine<->spine or leaf<->leaf link.
+    # Leaf 1 = Client's ToR, Leaf 4 = Server's ToR (different racks, so traffic always crosses the spine layer),
+    # other leaves = racks without host, they add fabric state (LSAs, BGP sessions/paths) as in a real fabric.
+    # Adapters: leaf 3/4 = uplinks to Spine 1/2, 5 = host-facing ; spine 3..6 = down to Leaf 1..4 (spines need 7 NICs).
+    # Addressing: Spine s <-> Leaf l = 10.<s>.<l>.0/24 (spine .1, leaf .2) ; Client LAN 10.0.1.0/24 ; Server LAN 10.0.2.0/24
+    # static = single path via Spine 1 (Spine 2 holds equivalent standby routes, unused by the leaves).
+    # BGP    = eBGP-only fabric as in RFC 7938: all spines share AS65100, each leaf has its own AS (Leaf l = AS6510<l>).
+    #          The shared spine AS stops leaf-transit paths (Spine 1 -> Leaf x -> Spine 2) through AS-path loop detection.
+    supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
+    failure_events = [
+        #{ type = "link", link_index = 1, happens_at = 30 }  # Leaf 1 <-> Spine 1: RIP/OSPF/BGP reroute via Spine 2
+    ]
+
+    [Datacenter.network]
+    physical_links = [
+        { node_a = "Client", adapter_a = 0, node_b = "Leaf 1", adapter_b = 5 },         # [0] Client <-> Leaf 1
+        { node_a = "Leaf 1", adapter_a = 3, node_b = "Spine 1", adapter_b = 3 },        # [1] Leaf 1 <-> Spine 1
+        { node_a = "Leaf 1", adapter_a = 4, node_b = "Spine 2", adapter_b = 3 },        # [2] Leaf 1 <-> Spine 2
+        { node_a = "Leaf 2", adapter_a = 3, node_b = "Spine 1", adapter_b = 4 },        # [3] Leaf 2 <-> Spine 1
+        { node_a = "Leaf 2", adapter_a = 4, node_b = "Spine 2", adapter_b = 4 },        # [4] Leaf 2 <-> Spine 2
+        { node_a = "Leaf 3", adapter_a = 3, node_b = "Spine 1", adapter_b = 5 },        # [5] Leaf 3 <-> Spine 1
+        { node_a = "Leaf 3", adapter_a = 4, node_b = "Spine 2", adapter_b = 5 },        # [6] Leaf 3 <-> Spine 2
+        { node_a = "Leaf 4", adapter_a = 3, node_b = "Spine 1", adapter_b = 6 },        # [7] Leaf 4 <-> Spine 1
+        { node_a = "Leaf 4", adapter_a = 4, node_b = "Spine 2", adapter_b = 6 },        # [8] Leaf 4 <-> Spine 2
+        { node_a = "Server", adapter_a = 0, node_b = "Leaf 4", adapter_b = 5 },         # [9] Leaf 4 <-> Server
+    ]
+
+    [Datacenter.network.nodes.Client]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.1.2/24"
+    x = -300
+    y = 200
+
+    [Datacenter.network.nodes.Server]
+    vcpu = 2
+    ram = 2048
+    ip = "10.0.2.2/24"
+    x = 300
+    y = 200
+
+    [Datacenter.network.nodes."Spine 1"]
+    number_nics = 7
+    ips = { 3 = "10.1.1.1/24", 4 = "10.1.2.1/24", 5 = "10.1.3.1/24", 6 = "10.1.4.1/24" }
+    x = -100
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.1.2", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.1.4.2", interface = 6 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5, 6],
+            networks_to_add = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24", "10.1.4.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.0.1",
+            areas_to_add = {
+                0 = [3, 4, 5, 6]
+            },
+            networks_to_add = [
+                { network = "10.1.1.0/24", area = 0 },
+                { network = "10.1.2.0/24", area = 0 },
+                { network = "10.1.3.0/24", area = 0 },
+                { network = "10.1.4.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65100,
+            neighbors = [
+                { address = "10.1.1.2", remote_as = 65101, next_hop_self = false },
+                { address = "10.1.2.2", remote_as = 65102, next_hop_self = false },
+                { address = "10.1.3.2", remote_as = 65103, next_hop_self = false },
+                { address = "10.1.4.2", remote_as = 65104, next_hop_self = false }
+            ],
+            networks_to_advertise = []
+        }
+    }
+
+    [Datacenter.network.nodes."Spine 2"]
+    number_nics = 7
+    ips = { 3 = "10.2.1.1/24", 4 = "10.2.2.1/24", 5 = "10.2.3.1/24", 6 = "10.2.4.1/24" }
+    x = 100
+    y = -75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.2.1.2", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.2.4.2", interface = 6 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5, 6],
+            networks_to_add = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24", "10.2.4.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.0.2",
+            areas_to_add = {
+                0 = [3, 4, 5, 6]
+            },
+            networks_to_add = [
+                { network = "10.2.1.0/24", area = 0 },
+                { network = "10.2.2.0/24", area = 0 },
+                { network = "10.2.3.0/24", area = 0 },
+                { network = "10.2.4.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65100,
+            neighbors = [
+                { address = "10.2.1.2", remote_as = 65101, next_hop_self = false },
+                { address = "10.2.2.2", remote_as = 65102, next_hop_self = false },
+                { address = "10.2.3.2", remote_as = 65103, next_hop_self = false },
+                { address = "10.2.4.2", remote_as = 65104, next_hop_self = false }
+            ],
+            networks_to_advertise = []
+        }
+    }
+
+    [Datacenter.network.nodes."Leaf 1"]
+    number_nics = 6
+    ips = { 3 = "10.1.1.2/24", 4 = "10.2.1.2/24", 5 = "10.0.1.1/24" }
+    x = -300
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.2.0/24", gateway = "10.1.1.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.1.1.0/24", "10.2.1.0/24", "10.0.1.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.1.1",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.1.1.0/24", area = 0 },
+                { network = "10.2.1.0/24", area = 0 },
+                { network = "10.0.1.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65101,
+            neighbors = [
+                { address = "10.1.1.1", remote_as = 65100, next_hop_self = false },
+                { address = "10.2.1.1", remote_as = 65100, next_hop_self = false }
+            ],
+            networks_to_advertise = ["10.0.1.0/24"]
+        }
+    }
+
+    [Datacenter.network.nodes."Leaf 2"]
+    number_nics = 6
+    ips = { 3 = "10.1.2.2/24", 4 = "10.2.2.2/24" }
+    x = -100
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.2.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.1.2.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.1.2.0/24", "10.2.2.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.1.2",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.1.2.0/24", area = 0 },
+                { network = "10.2.2.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65102,
+            neighbors = [
+                { address = "10.1.2.1", remote_as = 65100, next_hop_self = false },
+                { address = "10.2.2.1", remote_as = 65100, next_hop_self = false }
+            ],
+            networks_to_advertise = []
+        }
+    }
+
+    [Datacenter.network.nodes."Leaf 3"]
+    number_nics = 6
+    ips = { 3 = "10.1.3.2/24", 4 = "10.2.3.2/24" }
+    x = 100
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.3.1", interface = 3 },
+            { distant_network = "10.0.2.0/24", gateway = "10.1.3.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4],
+            networks_to_add = ["10.1.3.0/24", "10.2.3.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.1.3",
+            areas_to_add = {
+                0 = [3, 4]
+            },
+            networks_to_add = [
+                { network = "10.1.3.0/24", area = 0 },
+                { network = "10.2.3.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65103,
+            neighbors = [
+                { address = "10.1.3.1", remote_as = 65100, next_hop_self = false },
+                { address = "10.2.3.1", remote_as = 65100, next_hop_self = false }
+            ],
+            networks_to_advertise = []
+        }
+    }
+
+    [Datacenter.network.nodes."Leaf 4"]
+    number_nics = 6
+    ips = { 3 = "10.1.4.2/24", 4 = "10.2.4.2/24", 5 = "10.0.2.1/24" }
+    x = 300
+    y = 75
+    routes_config = {
+        static = [
+            { distant_network = "10.0.1.0/24", gateway = "10.1.4.1", interface = 3 },
+        ],
+        RIP = {
+            interfaces_to_enable = [3, 4, 5],
+            networks_to_add = ["10.1.4.0/24", "10.2.4.0/24", "10.0.2.0/24"]
+        },
+        OSPF = {
+            router_id = "10.255.1.4",
+            areas_to_add = {
+                0 = [3, 4, 5]
+            },
+            networks_to_add = [
+                { network = "10.1.4.0/24", area = 0 },
+                { network = "10.2.4.0/24", area = 0 },
+                { network = "10.0.2.0/24", area = 0 }
+            ]
+        },
+        BGP = {
+            local_as = 65104,
+            neighbors = [
+                { address = "10.1.4.1", remote_as = 65100, next_hop_self = false },
+                { address = "10.2.4.1", remote_as = 65100, next_hop_self = false }
+            ],
+            networks_to_advertise = ["10.0.2.0/24"]
+        }
+    }
