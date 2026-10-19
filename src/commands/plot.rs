@@ -46,7 +46,7 @@ const PLOTS: [Plot; 4] = [
         plot_name: "throughput_latency_ellipse",
         support_tests: &["rrul", "voip-rrul"],
         adjustment: 0,
-        additional_args: &["--bounds-x=1000,0", "--bounds-y=500,0"]
+        additional_args: &["--bounds-x=10,0", "--bounds-y=500,0"]
     },
 ];
 

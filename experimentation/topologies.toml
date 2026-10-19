@@ -54,9 +54,7 @@
 
 [Double]
     supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
-    failure_events = [
-        #{ type = "link", link_index = 1, happens_at = 30 }
-    ]
+    failure_events = []
 
     [Double.network]
     physical_links = [
@@ -154,7 +152,7 @@
     # Mixed = per operator AS65001..AS65004: OSPF inside each AS + full-mesh iBGP (next-hop-self) + eBGP between ASes.
     supported_routing_protocols = ["static", "RIP", "OSPF", "BGP", "Mixed"]
     failure_events = [
-        #{ type = "link", link_index = 6, happens_at = 30 }  # AS2 R1 <-> AS2 R2: RIP/OSPF/BGP/Mixed reroute via AS2 R4
+        { type = "link", link_index = 6, happens_at = 30 }  # AS2 R1 <-> AS2 R2: RIP/OSPF/BGP/Mixed reroute via AS2 R4
     ]
 
     [Multi-operator.network]
@@ -1107,7 +1105,7 @@
     #          The shared spine AS stops leaf-transit paths (Spine 1 -> Leaf x -> Spine 2) through AS-path loop detection.
     supported_routing_protocols = ["static", "RIP", "OSPF", "BGP"]
     failure_events = [
-        #{ type = "link", link_index = 1, happens_at = 30 }  # Leaf 1 <-> Spine 1: RIP/OSPF/BGP reroute via Spine 2
+        { type = "link", link_index = 1, happens_at = 30 }  # Leaf 1 <-> Spine 1: RIP/OSPF/BGP reroute via Spine 2
     ]
 
     [Datacenter.network]

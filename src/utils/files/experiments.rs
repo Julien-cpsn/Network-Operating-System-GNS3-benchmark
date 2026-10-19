@@ -32,11 +32,11 @@ pub fn parse_experiments_files(experiment_selection: &ExperimentSelectionArgs) -
 
         // Exclude not selected experiment
         
-        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.starts_with(&format!("{topology_name},")){
+        if let Some(topology_name) = &experiment_selection.topology && !experiment.experiment_name.starts_with(&format!("{topology_name},")) {
             continue;
         }
 
-        if let Some(os) = &experiment_selection.os && !experiment.experiment_name.contains(&format!(",{os},")){
+        if let Some(os) = &experiment_selection.os && !experiment.experiment_name.contains(&format!(",{os},")) {
             continue;
         }
 
@@ -44,18 +44,27 @@ pub fn parse_experiments_files(experiment_selection: &ExperimentSelectionArgs) -
             continue;
         }
 
-        if let Some(resources) = &experiment_selection.resources && !experiment.experiment_name.contains(&format!(",{resources},")){
+        if let Some(resources) = &experiment_selection.resources && !experiment.experiment_name.contains(&format!(",{resources},")) {
             continue;
         }
 
-        if let Some(nic) = &experiment_selection.nic && !experiment.experiment_name.contains(&format!(",{nic},")){
+        if let Some(nic) = &experiment_selection.nic && !experiment.experiment_name.contains(&format!(",{nic},")) {
             continue;
         }
 
-        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.ends_with(&format!(",{protocol}")){
+        if let Some(protocol) = &experiment_selection.protocol && !experiment.experiment_name.contains(&format!(",{protocol},")) {
             continue;
         }
-        
+
+        if let Some(failures) = experiment_selection.failures &&
+            (failures && experiment.experiment_name.ends_with(",no-failures")
+            ||
+            (!failures && experiment.experiment_name.ends_with(",failures")))
+        {
+            continue;
+        }
+
+
         experiments.push(experiment);
     }
 

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::exit;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use indexmap::IndexMap;
 use tracing::{error, info, warn};
 use strum::VariantArray;
@@ -100,6 +100,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                         let topology_dir = create_dir_if_does_not_exist(nic_dir.join(topology_name))?;
 
                         'routing_protocol: for routing_protocol in &topology.supported_routing_protocols {
+
                             if routing_protocol != &RoutingProtocol::Static {
                                 if let Some(routing_stack_name) = &os.routing_stack {
                                     let routing_stack = routing_stack_list.get(routing_stack_name).ok_or_else(|| anyhow!("No routing stack found for {}", os.network_stack))?;
@@ -113,7 +114,7 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                         RoutingProtocol::Mixed => {
                                             let protocols_to_use = topology.network.nodes
                                                 .iter()
-                                                .filter_map(|(_,n)| n.node_type.get_router())
+                                                .filter_map(|(_, n)| n.node_type.get_router())
                                                 .filter_map(|r| r.routes_config.get(&RoutingProtocol::Mixed))
                                                 .map(|r| r.unwrap_mixed().keys().collect::<Vec<_>>())
                                                 .flatten()
@@ -132,139 +133,179 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                         }
                                         _ => {}
                                     }
-                                }
-                                else {
+                                } else {
                                     // Skip experiment generation if there is no routing stack and the protocol is no static
                                     continue;
                                 }
                             }
 
                             let routing_protocol_dir = create_dir_if_does_not_exist(topology_dir.join(routing_protocol.to_string()))?;
-                            let experiment_path = routing_protocol_dir.join("experiment.json");
 
-                            experiment_count += 1;
-
-                            let mut longest_xp = 0;
-
-                            for test in test_batch {
-                                let total_duration = test.fire_at + test.duration;
-
-                                if total_duration > longest_xp {
-                                    longest_xp = total_duration
-                                }
-                            }
-
-                            os_xp_seconds += 60 * topology.network.nodes.len() + INTRA_XP_WAIT as usize + longest_xp as usize + POST_XP_WAIT as usize + INTRA_XP_WAIT as usize;
-
-                            match &generate_command.command {
-                                GenerateSubcommand::Run(_) | GenerateSubcommand::Files { .. } => {
-                                    info!(target: TARGET, "{}, {}, {}, {}, {}", os_name, test_batch_name, resources, topology_name, routing_protocol);
-                                }
-                                GenerateSubcommand::Commands { .. } => {
-                                    println!(
-                                        "cargo run -- run --os \"{}\" --test-batch \"{}\" --resources \"{}\" --topology \"{}\" --nic \"{}\" --protocol \"{}\"",
-                                        os_name,
-                                        test_batch_name,
-                                        resources.to_command(),
-                                        topology_name,
-                                        nic.to_command(),
-                                        routing_protocol
-                                    );
-                                    continue;
-                                }
-                            }
-
-                            if experiment_path.exists() && override_ == false {
-                                continue;
-                            }
-
-                            let mut router_id: u8 = 0;
-
-                            let mut nodes = IndexMap::new();
-
-                            for (key, generic_node) in &topology.network.nodes {
-                                let (vcpu, ram, node_type) = match &generic_node.node_type {
-                                    GenericNodeType::Guest(guest) => {
-                                        let node_type = NodeType::Guest(Guest {
-                                            ip: guest.ip,
-                                        });
-
-                                        (guest.vcpu, guest.ram, node_type)
-                                    },
-                                    GenericNodeType::Router(router) => {
-                                        let (vcpu, ram) = resources.to_vcpu_and_ram();
-                                        let routes = match router.routes_config.get(routing_protocol) {
-                                            Some(routes) => routes.clone(),
-                                            None => return Err(anyhow!("Routing protocol \"{}\" has no route in router \"{}\"", routing_protocol, key)),
-                                        };
-
-                                        let mut nics = IndexMap::new();
-
-                                        for (index, ip) in &router.ips {
-                                            let router_nic = Nic {
-                                                nic_type: nic.clone(),
-                                                ip_address: *ip,
-                                            };
-
-                                            nics.insert(index.clone(), router_nic);
-                                        }
-
-                                        let node_type = NodeType::Router(Router {
-                                            id: format!("{router_id}.{router_id}.{router_id}.{router_id}"),
-                                            os_name: os_name.to_owned(),
-                                            number_nics: router.number_nics,
-                                            nics,
-                                            routes_config: routes,
-                                        });
-
-                                        (vcpu, ram, node_type)
+                            let has_failures = !topology.failure_events.is_empty();
+                            let with_failures_options = match experiment_selection.failures {
+                                Some(failures) => match failures {
+                                    true => match has_failures {
+                                        true => vec![true],
+                                        false => bail!("No failures are listed in the \"{topology_name}\" topology")
                                     }
-                                };
-
-                                let node = Node {
-                                    vcpu,
-                                    ram,
-                                    x: generic_node.x,
-                                    y: generic_node.y,
-                                    node_type,
-                                    gns3_node: None,
-                                    distant_networks: vec![],
-                                };
-
-                                nodes.insert(key.to_owned(), node);
-
-                                router_id += 1;
-                            }
-
-                            for (index, physical_link) in topology.network.physical_links.iter().enumerate() {
-                                if !nodes.contains_key(&physical_link.node_a) {
-                                    return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_a, topology_name, index));
+                                    false => match has_failures {
+                                        true => vec![false],
+                                        false => vec![false]
+                                    }
                                 }
-
-                                if !nodes.contains_key(&physical_link.node_b) {
-                                    return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_b, topology_name, index));
+                                None => match has_failures {
+                                    true => vec![true, false],
+                                    false => vec![false]
                                 }
-                            }
-
-                            let experiment = Experiment {
-                                experiment_name: format!("{topology_name},{os_name},{test_batch_name},{resources},{nic},{routing_protocol}"),
-                                network: Network {
-                                    nodes,
-                                    physical_links: topology.network.physical_links.clone(),
-                                    failure_events: topology.failure_events.clone(),
-                                },
-                                test_batch: test_batch.clone(),
                             };
 
-                            let experiment_json = serde_json::to_string_pretty(&experiment)?;
+                            for with_failures in with_failures_options {
+                                let with_failures_string = match with_failures {
+                                    true => String::from("failures"),
+                                    false => String::from("no-failures"),
+                                };
 
-                            let mut experiment_file = OpenOptions::new()
-                                .create(true)
-                                .write(true)
-                                .truncate(true)
-                                .open(experiment_path)?;
+                                let with_failures_dir = create_dir_if_does_not_exist(routing_protocol_dir.join(&with_failures_string))?;
 
-                            experiment_file.write_all(experiment_json.as_bytes())?;
+                                let experiment_path = with_failures_dir.join("experiment.json");
+
+                                experiment_count += 1;
+
+                                let mut longest_xp = 0;
+
+                                for test in test_batch {
+                                    let total_duration = test.fire_at + test.duration;
+
+                                    if total_duration > longest_xp {
+                                        longest_xp = total_duration
+                                    }
+                                }
+
+                                os_xp_seconds += 60 * topology.network.nodes.len() + INTRA_XP_WAIT as usize + longest_xp as usize + POST_XP_WAIT as usize + INTRA_XP_WAIT as usize;
+
+                                match &generate_command.command {
+                                    GenerateSubcommand::Run(_) | GenerateSubcommand::Files { .. } => {
+                                        info!(
+                                            target: TARGET,
+                                            "{}, {}, {}, {}, {}, {}",
+                                            os_name,
+                                            test_batch_name,
+                                            resources,
+                                            topology_name,
+                                            routing_protocol,
+                                            with_failures_string
+                                        );
+                                    }
+                                    GenerateSubcommand::Commands { .. } => {
+                                        println!(
+                                            "cargo run -- run --os \"{}\" --test-batch \"{}\" --resources \"{}\" --topology \"{}\" --nic \"{}\" --protocol \"{}\" --failures {}",
+                                            os_name,
+                                            test_batch_name,
+                                            resources.to_command(),
+                                            topology_name,
+                                            nic.to_command(),
+                                            routing_protocol,
+                                            with_failures
+                                        );
+                                        continue;
+                                    }
+                                }
+
+                                if experiment_path.exists() && override_ == false {
+                                    continue;
+                                }
+
+                                let mut router_id: u8 = 0;
+
+                                let mut nodes = IndexMap::new();
+
+                                for (key, generic_node) in &topology.network.nodes {
+                                    let (vcpu, ram, node_type) = match &generic_node.node_type {
+                                        GenericNodeType::Guest(guest) => {
+                                            let node_type = NodeType::Guest(Guest {
+                                                ip: guest.ip,
+                                            });
+
+                                            (guest.vcpu, guest.ram, node_type)
+                                        },
+                                        GenericNodeType::Router(router) => {
+                                            let (vcpu, ram) = resources.to_vcpu_and_ram();
+                                            let routes = match router.routes_config.get(routing_protocol) {
+                                                Some(routes) => routes.clone(),
+                                                None => return Err(anyhow!("Routing protocol \"{}\" has no route in router \"{}\"", routing_protocol, key)),
+                                            };
+
+                                            let mut nics = IndexMap::new();
+
+                                            for (index, ip) in &router.ips {
+                                                let router_nic = Nic {
+                                                    nic_type: nic.clone(),
+                                                    ip_address: *ip,
+                                                };
+
+                                                nics.insert(index.clone(), router_nic);
+                                            }
+
+                                            let node_type = NodeType::Router(Router {
+                                                id: format!("{router_id}.{router_id}.{router_id}.{router_id}"),
+                                                os_name: os_name.to_owned(),
+                                                number_nics: router.number_nics,
+                                                nics,
+                                                routes_config: routes,
+                                            });
+
+                                            (vcpu, ram, node_type)
+                                        }
+                                    };
+
+                                    let node = Node {
+                                        vcpu,
+                                        ram,
+                                        x: generic_node.x,
+                                        y: generic_node.y,
+                                        node_type,
+                                        gns3_node: None,
+                                        distant_networks: vec![],
+                                    };
+
+                                    nodes.insert(key.to_owned(), node);
+
+                                    router_id += 1;
+                                }
+
+                                for (index, physical_link) in topology.network.physical_links.iter().enumerate() {
+                                    if !nodes.contains_key(&physical_link.node_a) {
+                                        return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_a, topology_name, index));
+                                    }
+
+                                    if !nodes.contains_key(&physical_link.node_b) {
+                                        return Err(anyhow!("Node \"{}\" does not exist in topology \"{}\" for link {}", physical_link.node_b, topology_name, index));
+                                    }
+                                }
+
+                                let experiment = Experiment {
+                                    experiment_name: format!("{topology_name},{os_name},{test_batch_name},{resources},{nic},{routing_protocol},{with_failures_string}"),
+                                    network: Network {
+                                        nodes,
+                                        physical_links: topology.network.physical_links.clone(),
+                                        failure_events: match with_failures {
+                                            true => topology.failure_events.clone(),
+                                            false => Vec::new()
+                                        },
+                                    },
+                                    test_batch: test_batch.clone(),
+                                };
+
+                                let experiment_json = serde_json::to_string_pretty(&experiment)?;
+
+                                let mut experiment_file = OpenOptions::new()
+                                    .create(true)
+                                    .write(true)
+                                    .truncate(true)
+                                    .open(experiment_path)?;
+
+                                experiment_file.write_all(experiment_json.as_bytes())?;
+                            }
                         }
                     }
                 }

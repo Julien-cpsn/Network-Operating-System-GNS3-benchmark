@@ -8,8 +8,8 @@ use indexmap::IndexMap;
 use serde_json::{json, Value};
 use tokio::time::sleep;
 use tracing::{info, warn};
-use crate::args::args::ExperimentSelectionArgs;
 use crate::args::g5k::DeployG5kCommand;
+use crate::args::run::RunCommand;
 use crate::commands::g5k::utils::{connect_to_ssh, ensure_identifier, scp_upload, ssh_exec, G5K_API_URL, G5K_ACCESS_HOST};
 use crate::models::operating_system::OperatingSystem;
 use crate::utils::files::network_stacks::parse_network_stack_list_file;
@@ -48,11 +48,11 @@ pub async fn deploy_g5k(command: DeployG5kCommand) -> anyhow::Result<()> {
         }
 
         let arguments = shlex::split(&command_line[17..]).context("invalid quoting")?;
-        let cmd = ExperimentSelectionArgs::augment_args(Command::new("inline").no_binary_name(true));
+        let cmd = RunCommand::augment_args(Command::new("inline").no_binary_name(true));
         let matches = cmd.try_get_matches_from(arguments)?;
-        let args = ExperimentSelectionArgs::from_arg_matches(&matches)?;
+        let args = RunCommand::from_arg_matches(&matches)?;
 
-        if let Some(os_name) = args.os {
+        if let Some(os_name) = args.experiment_selection.os {
             let os = os_list.get(&os_name).ok_or_else(|| anyhow!("No operating system {}", os_name))?;
             operating_systems_to_use.insert(os_name, os.clone());
         }

@@ -61,4 +61,8 @@ pub struct ExperimentSelectionArgs {
     /// Routing protocol to use. All if absent
     #[arg(short, long)]
     pub protocol: Option<RoutingProtocol>,
+
+    /// Run the experiment with the failure event listed in the topology
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    pub failures: Option<bool>,
 }
