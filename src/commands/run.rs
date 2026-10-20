@@ -94,67 +94,81 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
     }).expect("Error setting Ctrl-C handler");
 
     let nb_experiments = experiments.len();
-    for (index, mut experiment) in experiments.drain(..).enumerate() {
+    let nb_runs = run_command.run_command.runs;
+
+    'experiment_loop: for (experiment_index, mut experiment) in experiments.drain(..).enumerate() {
         let experiment_path = RESULT_DIR_PATH.join(&experiment.experiment_name);
         if experiment_path.exists() {
            fs::remove_dir_all(&experiment_path)?;
         }
 
-        fs::create_dir(&experiment_path)?;
+        for run_index in 1..nb_runs + 1 {
+            let experiment_run_path = experiment_path.join(format!("run_{run_index}"));
 
-        find_and_delete_experiment_log_file(&experiment.experiment_name)?;
+            fs::create_dir_all(&experiment_run_path)?;
 
-        let (dispatcher, _file_guard) = setup_experiment_logger(&experiment.experiment_name, EXPERIMENT_LOG_FILE_NAME)?;
-        let _log_guard = dispatcher.set_default();
+            find_and_delete_experiment_log_file(&experiment_run_path)?;
 
+            let (dispatcher, _file_guard) = setup_experiment_logger(&experiment_run_path, EXPERIMENT_LOG_FILE_NAME)?;
+            let _log_guard = dispatcher.set_default();
 
-        tokio::select! {
-            result = run_experiment(
-                index,
-                nb_experiments,
-                &run_command,
-                &gns3,
-                &os_list,
-                &network_stack_list,
-                &routing_stack_list,
-                &images_path,
-                &mut experiment,
-            ) => {
-                if let Err(error) = result {
-                    error!(target: TARGET, "{}", error);
-                    exit(1);
-                }
-            },
-             _ = token.cancelled() => {
-                info!(target: TARGET, "Stopping experiment");
-                for (node_name, node) in experiment.network.nodes.iter_mut() {
-                    let gns3_node = node.gns3_node.as_mut().unwrap();
-                    gns3_node.stop().await?;
-                    info!(target: TARGET, "Stopping node {node_name}");
+            tokio::select! {
+                result = run_experiment(
+                    experiment_index + 1,
+                    nb_experiments,
+                    run_index,
+                    nb_runs,
+                    &run_command,
+                    &gns3,
+                    &os_list,
+                    &network_stack_list,
+                    &routing_stack_list,
+                    &images_path,
+                    experiment.clone(),
+                    &experiment_run_path
+                ) => {
+                    if let Err(error) = result {
+                        error!(target: TARGET, "{}", error);
+                        exit(1);
+                    }
+                },
+                 _ = token.cancelled() => {
+                    info!(target: TARGET, "Stopping experiment");
+                    for (node_name, node) in experiment.network.nodes.iter_mut() {
+                        let gns3_node = node.gns3_node.as_mut().unwrap();
+                        gns3_node.stop().await?;
+                        info!(target: TARGET, "Stopping node {node_name}");
+                    }
+                    break 'experiment_loop;
                 }
             }
-        }
 
-        sleep(Duration::from_secs(INTER_XP_WAIT)).await;
+            sleep(Duration::from_secs(INTER_XP_WAIT)).await;
+        }
     }
+
+    info!(target: TARGET, "Finished");
 
     Ok(())
 }
 
 pub async fn run_experiment(
-    index: usize,
+    experiment_index: usize,
     nb_experiments: usize,
+    run_index: u8,
+    nb_runs: u8,
     run_command: &RunCommand,
     gns3: &Arc<Gns3Connector>,
     oses: &IndexMap<String, OperatingSystem>,
     network_stacks: &IndexMap<String, NetworkStack>,
     routing_stacks: &IndexMap<String, RoutingStack>,
     images_path: &PathBuf,
-    experiment: &mut Experiment,
+    mut experiment: Experiment,
+    experiment_run_path: &PathBuf
 ) -> anyhow::Result<()> {
     const TARGET: &str = "experiment";
 
-    info!(target: TARGET, "----- Running experiment {}/{}: {} -----", index + 1, nb_experiments, experiment.experiment_name);
+    info!(target: TARGET, "----- Running experiment {}/{}, run {}/{}: {} -----", experiment_index, nb_experiments, run_index, nb_runs, experiment.experiment_name);
 
     /* INITIALIZATION */
 
@@ -162,9 +176,9 @@ pub async fn run_experiment(
 
     find_and_delete_projects(gns3.clone()).await?;
     find_and_delete_templates(gns3.clone()).await?;
-    find_and_delete_log_files(&experiment.experiment_name, &experiment.network.nodes)?;
+    find_and_delete_log_files(&experiment_run_path, &experiment.network.nodes)?;
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests(&experiment.network.nodes) {
         generate_and_create_guest_template(gns3.clone(), &guest_name, &node).await?;
     }
 
@@ -198,7 +212,7 @@ pub async fn run_experiment(
 
     let mut links = Vec::new();
 
-    for (index, link) in experiment.network.physical_links.drain(..).enumerate() {
+    for (index, link) in experiment.network.physical_links.iter().enumerate() {
         let (node_a_name, node_a) = experiment.network.nodes.get_key_value(&link.node_a).ok_or_else(|| anyhow!("Node a \"{}\" not found in link {}", &link.node_a, index))?;
         let (node_b_name, node_b) = experiment.network.nodes.get_key_value(&link.node_b).ok_or_else(|| anyhow!("Node b \"{}\" not found in link {}", &link.node_b, index))?;
 
@@ -233,7 +247,7 @@ pub async fn run_experiment(
 
     /* CONFIG */
 
-    for (guest_name, node) in filter_guests(&mut experiment.network.nodes) {
+    for (guest_name, node) in filter_guests(&experiment.network.nodes) {
         let guest = node.unwrap_guest();
         let mut config_commands = guest_config_commands(guest.ip.address());
 
@@ -246,7 +260,7 @@ pub async fn run_experiment(
         config_commands.push(OsCommand::new_line(GUEST_INPUT_READY));
 
         execute_commands_from_node(
-            &experiment.experiment_name,
+            &experiment_run_path,
             &guest_name,
             node.gns3_node.as_ref().unwrap(),
             config_commands,
@@ -277,7 +291,7 @@ pub async fn run_experiment(
         info!(target: TARGET, "Telnet console: telnet {} {}", gns3_node.console_host.as_ref().unwrap(), gns3_node.console.unwrap());
 
         execute_commands_from_node(
-            &experiment.experiment_name,
+            &experiment_run_path,
             &router_name,
             &gns3_node,
             login_commands,
@@ -286,7 +300,7 @@ pub async fn run_experiment(
         )?;
     }
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&experiment.network.nodes) {
         let gns3_node = node.gns3_node.as_ref().ok_or_else(|| anyhow!("No GNS3 node was attached to the guest"))?;
         let router = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
@@ -384,7 +398,7 @@ pub async fn run_experiment(
             .concat();
 
         execute_commands_from_node(
-            &experiment.experiment_name,
+            &experiment_run_path,
             &router_name,
             &gns3_node,
             commands,
@@ -398,7 +412,7 @@ pub async fn run_experiment(
     let stop_monitoring = Arc::new(AtomicBool::new(false));
     let mut monitor_threads = JoinSet::new();
 
-    for (router_name, node) in filter_routers(&mut experiment.network.nodes) {
+    for (router_name, node) in filter_routers(&experiment.network.nodes) {
         let router  = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
 
@@ -419,7 +433,7 @@ pub async fn run_experiment(
                 .collect();
 
             monitor_threads.spawn(monitor_task(
-                experiment.experiment_name.clone(),
+                experiment_run_path.clone(),
                 router_name.clone(),
                 gns3_node.console_host.as_ref().unwrap().to_string(),
                 gns3_node.console.unwrap(),
@@ -445,7 +459,7 @@ pub async fn run_experiment(
             FailureEvent::Link { link_index, happens_at } => {
                 let (link, gns3_link) = links.remove(*link_index);
 
-                failure_events_threads.spawn(link_failure(link, gns3_link, *happens_at));
+                failure_events_threads.spawn(link_failure(link.clone(), gns3_link, *happens_at));
             }
         }
     }
@@ -464,7 +478,7 @@ pub async fn run_experiment(
             let mut test_batch_commands = guest_test_batch_start_commands();
             
             for test in tests {
-                info!(target: TARGET, "Running test in {} seconds : {} (duration: {} seconds)", &test.name, &test.fire_at, &test.duration);
+                info!(target: TARGET, "Running test in {} seconds : {} (duration: {} seconds)", &test.fire_at, &test.name, &test.duration);
 
                 let to_node = experiment.network.nodes.get(&test.to).unwrap();
                 let to_node_ip = to_node.unwrap_guest().ip.address();
@@ -476,7 +490,7 @@ pub async fn run_experiment(
             test_batch_commands.extend(guest_test_batch_end_commands(&experiment.test_batch));
             
             test_threads.spawn(test_task(
-                experiment.experiment_name.clone(),
+                experiment_run_path.clone(),
                 from_node_name.to_owned(),
                 from_gns3_node.console_host.as_ref().unwrap().to_string(),
                 from_gns3_node.console.unwrap().clone(),
@@ -497,7 +511,7 @@ pub async fn run_experiment(
     monitor_threads.join_all().await;
 
     for test in &experiment.test_batch {
-        harvest_results(&experiment.experiment_name, &test)?;
+        harvest_results(&experiment_run_path, &test)?;
     }
 
     /* STOP */

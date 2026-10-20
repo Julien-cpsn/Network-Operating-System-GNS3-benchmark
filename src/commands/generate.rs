@@ -181,7 +181,13 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                     }
                                 }
 
-                                os_xp_seconds += 60 * topology.network.nodes.len() + INTRA_XP_WAIT as usize + longest_xp as usize + POST_XP_WAIT as usize + INTRA_XP_WAIT as usize;
+                                let runs = match &generate_command.command {
+                                    GenerateSubcommand::Run(run_command) => run_command.run_command.runs,
+                                    GenerateSubcommand::Files { .. } => 1,
+                                    GenerateSubcommand::Commands { runs, .. } => *runs
+                                };
+
+                                os_xp_seconds += (60 * topology.network.nodes.len() + INTRA_XP_WAIT as usize + longest_xp as usize + POST_XP_WAIT as usize + INTRA_XP_WAIT as usize) * runs as usize;
 
                                 match &generate_command.command {
                                     GenerateSubcommand::Run(_) | GenerateSubcommand::Files { .. } => {
@@ -196,16 +202,17 @@ pub fn generate(generate_command: GenerateCommand) -> anyhow::Result<()> {
                                             with_failures_string
                                         );
                                     }
-                                    GenerateSubcommand::Commands { .. } => {
+                                    GenerateSubcommand::Commands { runs, .. } => {
                                         println!(
-                                            "cargo run -- run --os \"{}\" --test-batch \"{}\" --resources \"{}\" --topology \"{}\" --nic \"{}\" --protocol \"{}\" --failures {}",
+                                            "cargo run -- run --os \"{}\" --test-batch \"{}\" --resources \"{}\" --topology \"{}\" --nic \"{}\" --protocol \"{}\" --failures {} --runs {}",
                                             os_name,
                                             test_batch_name,
                                             resources.to_command(),
                                             topology_name,
                                             nic.to_command(),
                                             routing_protocol,
-                                            with_failures
+                                            with_failures,
+                                            runs
                                         );
                                         continue;
                                     }

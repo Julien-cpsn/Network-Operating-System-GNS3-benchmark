@@ -25,5 +25,9 @@ pub enum GenerateSubcommand {
     Commands {
         #[clap(flatten)]
         experiment_selection: ExperimentSelectionArgs,
+
+        /// Number of runs per operating system
+        #[arg(long)]
+        runs: u8,
     }
 }

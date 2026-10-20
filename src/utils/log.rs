@@ -1,8 +1,8 @@
 use std::fs;
 use std::fs::OpenOptions;
-use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::ARGS;
 use std::io::stdout;
+use std::path::PathBuf;
 use indexmap::IndexMap;
 use tracing::{subscriber, Dispatch, Level, debug};
 use tracing::metadata::LevelFilter;
@@ -42,13 +42,13 @@ pub fn setup_global_logger() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn setup_experiment_logger(experiment_name: &str, name: &str) -> anyhow::Result<(Dispatch, WorkerGuard)> {
+pub fn setup_experiment_logger(experiment_path: &PathBuf, name: &str) -> anyhow::Result<(Dispatch, WorkerGuard)> {
     let verbosity = match (ARGS.verbosity.is_present(), ARGS.verbosity.tracing_level()) {
         (true, Some(level)) => level,
         _ => Level::DEBUG
     };
 
-    let log_dir_path = RESULT_DIR_PATH.join(&experiment_name).join(format!("{name}.log"));
+    let log_dir_path = experiment_path.join(format!("{name}.log"));
     let log_dir_file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -77,8 +77,7 @@ pub fn setup_experiment_logger(experiment_name: &str, name: &str) -> anyhow::Res
     Ok((Dispatch::new(subscriber), file_guard))
 }
 
-pub fn find_and_delete_experiment_log_file(experiment_name: &str) -> anyhow::Result<()> {
-    let experiment_path = RESULT_DIR_PATH.join(&experiment_name);
+pub fn find_and_delete_experiment_log_file(experiment_path: &PathBuf) -> anyhow::Result<()> {
     let experiment_log_path = experiment_path.join(format!("{EXPERIMENT_LOG_FILE_NAME}.log"));
 
     if experiment_log_path.exists() {
@@ -89,9 +88,7 @@ pub fn find_and_delete_experiment_log_file(experiment_name: &str) -> anyhow::Res
     Ok(())
 }
 
-pub fn find_and_delete_log_files(experiment_name: &str, nodes: &IndexMap<String, Node>) -> anyhow::Result<()> {
-    let experiment_path = RESULT_DIR_PATH.join(&experiment_name);
-
+pub fn find_and_delete_log_files(experiment_path: &PathBuf, nodes: &IndexMap<String, Node>) -> anyhow::Result<()> {
     for node_name in nodes.keys() {
         let path = experiment_path.join(format!("{node_name}.log"));
 

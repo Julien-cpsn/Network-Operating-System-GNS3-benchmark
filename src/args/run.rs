@@ -11,6 +11,10 @@ pub struct RunCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct RunCommandArgs {
+    /// Number of runs per operating system
+    #[arg(long)]
+    pub runs: u8,
+
     /// No sleep after starting the nodes and before starting the experiment
     #[arg(long)]
     pub no_sleep: bool,

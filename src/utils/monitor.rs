@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool};
 use tracing::{error, info};
@@ -7,7 +8,7 @@ use crate::utils::os_commands::execute::execute_commands;
 const TARGET: &str = "monitor";
 
 pub async fn monitor_task(
-    experiment_name: String,
+    experiment_run_path: PathBuf,
     router_name: String,
     console_host: String,
     console: i64,
@@ -20,7 +21,7 @@ pub async fn monitor_task(
     monitor_command.push(OsCommand::new_line(&input_ready));
 
     if let Err(err) = execute_commands(
-        &experiment_name,
+        &experiment_run_path,
         &router_name,
         &console_host,
         console,

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,12 +16,12 @@ const TARGET: &str = "telnet";
 
 //const TIMEOUT: Duration = Duration::from_secs(240);
 
-pub fn execute_commands_from_node(experiment_name: &str, node_name: &str, gns3_node: &Node, commands: Vec<OsCommand>, timeout: Option<u64>, remote_stop: Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
-    execute_commands(&experiment_name, &node_name, gns3_node.console_host.as_ref().unwrap(), gns3_node.console.unwrap(), commands, timeout, remote_stop)
+pub fn execute_commands_from_node(experiment_run_path: &PathBuf, node_name: &str, gns3_node: &Node, commands: Vec<OsCommand>, timeout: Option<u64>, remote_stop: Option<Arc<AtomicBool>>) -> anyhow::Result<()> {
+    execute_commands(&experiment_run_path, &node_name, gns3_node.console_host.as_ref().unwrap(), gns3_node.console.unwrap(), commands, timeout, remote_stop)
 }
 
 pub fn execute_commands(
-    experiment_name: &str,
+    experiment_run_path: &PathBuf,
     node_name: &str,
     console_host: &str,
     console: i64,
@@ -28,7 +29,7 @@ pub fn execute_commands(
     timeout: Option<u64>,
     remote_stop: Option<Arc<AtomicBool>>,
 ) -> anyhow::Result<()> {
-    let (dispatcher, _file_guard) = setup_experiment_logger(&experiment_name, &node_name)?;
+    let (dispatcher, _file_guard) = setup_experiment_logger(&experiment_run_path, &node_name)?;
 
     dispatcher::with_default(&dispatcher, || -> anyhow::Result<()> {
         let mut command = Command::new("telnet");

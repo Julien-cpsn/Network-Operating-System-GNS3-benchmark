@@ -35,6 +35,10 @@ walkdir = "2.5.0"
 ctrlc = "3.5.2"
 rpassword = "7.5.4"
 shlex = "2.0.1"
+csv = "1.4.0"
+chrono = "0.4.45"
+flate2 = "1.1.10"
+tempfile = "3.27.0"
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["chrono", "fmt"] }

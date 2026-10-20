@@ -1,8 +1,8 @@
 use crate::models::test::Test;
-use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::os_commands::execute::execute_commands;
 use std::fs;
+use std::path::PathBuf;
 use tracing::{error, info};
 use walkdir::{DirEntry, WalkDir};
 use crate::models::os_command::OsCommand;
@@ -10,14 +10,14 @@ use crate::models::os_command::OsCommand;
 const TARGET: &str = "test";
 
 pub async fn test_task(
-    experiment_name: String,
+    experiment_run_path: PathBuf,
     from_node_name: String,
     console_host: String,
     console: i64,
     test_commands: Vec<OsCommand>,
 ) -> anyhow::Result<()> {
     execute_commands(
-        &experiment_name,
+        &experiment_run_path,
         &from_node_name,
         &console_host,
         console,
@@ -29,10 +29,11 @@ pub async fn test_task(
     Ok(())
 }
 
-pub fn harvest_results(experiment_name: &str, test: &Test) -> anyhow::Result<()> {
+pub fn harvest_results(experiment_run_path: &PathBuf, test: &Test) -> anyhow::Result<()> {
     info!(target: TARGET, "Harvesting results for test {}...", &test.name);
 
-    let result_path = RESULT_DIR_PATH.join(&experiment_name).join(&test.name);
+    let result_path = experiment_run_path.join(&test.name);
+    
     fs::create_dir_all(&result_path)?;
 
     let walk_result_files = WalkDir::new(SHARED_DIR_PATH.as_path().join(&test.name));

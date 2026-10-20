@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
-use std::process::{Command};
-use tracing::{info};
+use std::process::{exit, Command};
+use tracing::{error, info, warn};
 use crate::args::plot::PlotCommand;
 use crate::utils::files::plot_dir::PLOT_DIR_PATH;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
@@ -11,6 +11,7 @@ use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
 const TARGET: &str = "plot";
 
+#[derive(Debug)]
 struct Plot {
     pub plot_type: &'static str,
     pub plot_name: &'static str,
@@ -53,7 +54,12 @@ const PLOTS: [Plot; 4] = [
 const EXTENSION: [&str; 2] = ["png", "svg"];
 
 pub fn plot(plot_command: PlotCommand) -> anyhow::Result<()> {
-    let experiment_results = extract_experiments_and_results(&plot_command.experiment_selection)?;
+    let experiment_results = extract_experiments_and_results(&plot_command.experiment_selection, true)?;
+
+    if experiment_results.is_empty() {
+        warn!(target: TARGET, "No experiment results found. Please use the \"compute\" command to pre-compute run results");
+        exit(1);
+    }
 
     let plot_legends: Vec<&Vec<String>> = experiment_results.iter().map(|e| &e.experiment_keywords).collect();
 
@@ -107,20 +113,28 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
         let mut flent_input_files_args = Vec::new();
 
         for experiment in experiment_results {
-            for (test, result_paths) in &experiment.result_paths_per_test {
-                if !plot.support_tests.contains(&test.as_str()) {
-                    continue;
-                }
-
-                for result_path in result_paths {
-                    if !result_path.file_name().unwrap().to_str().unwrap().starts_with(test) {
+            for (_, run_paths) in &experiment.result_paths_per_run_per_test {
+                for (test, result_paths) in run_paths {
+                    if !plot.support_tests.contains(&test.as_str()) {
                         continue;
                     }
 
-                    flent_input_files_args.push("-i");
-                    flent_input_files_args.push(result_path.to_str().unwrap());
+                    for result_path in result_paths {
+
+                        if !result_path.file_name().unwrap().to_str().unwrap().starts_with(test) {
+                            continue;
+                        }
+
+                        flent_input_files_args.push("-i");
+                        flent_input_files_args.push(result_path.to_str().unwrap());
+                    }
                 }
             }
+        }
+
+        if flent_input_files_args.is_empty() {
+            error!(target: TARGET, "No files found for plot");
+            exit(1);
         }
 
         let flent_notes = adjust_note(&notes, plot.adjustment);

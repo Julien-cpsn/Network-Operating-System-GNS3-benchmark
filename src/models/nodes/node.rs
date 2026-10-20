@@ -4,7 +4,7 @@ use cidr::Ipv4Cidr;
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Node {
     pub vcpu: u32,
     pub ram: u32,
