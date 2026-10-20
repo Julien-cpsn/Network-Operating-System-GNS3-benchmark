@@ -1,11 +1,13 @@
-use std::path::{Path};
-use std::process::Command;
-use anyhow::{bail, Context};
-use tracing::{debug, info};
 use crate::args::compute_results::ComputeResultsCommand;
-use crate::utils::flent::merge::{write_merged_results, MergeStat};
-use crate::utils::flent::summary::{write_runs_summary, PlanningConfig};
-use crate::utils::results::{extract_experiments_and_results, ExperimentAndResults};
+use anyhow::{Context, bail};
+use std::path::Path;
+use std::process::Command;
+use tracing::{debug, info};
+use crate::utils::files::results_dir::RESULT_DIR_PATH;
+use crate::utils::results::extract::{extract_experiments_and_results, ExperimentAndResults};
+use crate::utils::results::flent::merge::{write_merged_results, MergeStat};
+use crate::utils::results::flent::summary::{write_runs_summary, PlanningConfig};
+use crate::utils::results::resources::write_resources_summaries;
 
 const TARGET: &str = "results";
 
@@ -17,8 +19,9 @@ pub fn compute_results(compute_results_command: ComputeResultsCommand) -> anyhow
         info!(target: TARGET, "{}", &experiment.experiment.experiment_name);
 
         add_flent_stats(&experiment)?;
-        add_runs_summaries(&experiment)?;
-        add_merged_results(&experiment)?;
+        add_flent_runs_summaries(&experiment)?;
+        add_merged_flent_results(&experiment)?;
+        add_resources_summaries(&experiment)?;
     }
 
     Ok(())
@@ -62,7 +65,7 @@ fn export_with_flent(format: &str, input: &Path, output: &Path) -> anyhow::Resul
 
     Ok(())
 }
-fn add_runs_summaries(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
+fn add_flent_runs_summaries(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
     let config = PlanningConfig::default();
 
     write_runs_summary(&experiment.result_paths_per_run_per_test, &config)?;
@@ -70,8 +73,14 @@ fn add_runs_summaries(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn add_merged_results(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
+fn add_merged_flent_results(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
     write_merged_results(&experiment.result_paths_per_run_per_test, MergeStat::default())?;
 
+    Ok(())
+}
+
+fn add_resources_summaries(experiment: &ExperimentAndResults) -> anyhow::Result<()> {
+    let experiment_dir = RESULT_DIR_PATH.join(&experiment.experiment.experiment_name);
+    write_resources_summaries(&experiment_dir)?;
     Ok(())
 }

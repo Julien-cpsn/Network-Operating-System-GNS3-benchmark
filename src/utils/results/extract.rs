@@ -5,7 +5,7 @@ use crate::args::args::ExperimentSelectionArgs;
 use crate::models::experiment::Experiment;
 use crate::utils::files::experiments::parse_experiments_files;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
-use crate::utils::flent::summary::SUMMARY_FOLDER_NAME;
+use crate::utils::results::flent::summary::SUMMARY_FOLDER_NAME;
 
 const TARGET: &str = "results";
 

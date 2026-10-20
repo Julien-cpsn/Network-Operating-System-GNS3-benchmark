@@ -5,7 +5,8 @@ use tracing::{error, info, warn};
 use crate::args::plot::PlotCommand;
 use crate::utils::files::plot_dir::PLOT_DIR_PATH;
 use crate::utils::files::results_dir::RESULT_DIR_PATH;
-use crate::utils::results::{extract_experiments_and_results, ExperimentAndResults};
+use crate::utils::results::extract::{extract_experiments_and_results, ExperimentAndResults};
+use crate::utils::results::flent::summary::SUMMARY_FOLDER_NAME;
 use crate::utils::utils::{extract_and_sort_common_parts, filter_routers};
 
 
@@ -175,7 +176,7 @@ fn plot_flent(plot_command: &PlotCommand, plot_output_directory_path: &PathBuf, 
             let command = command.args(flent_args);
             command.spawn()?;
 
-            info!(target: TARGET, "Plotted {}", plot_path.display());
+            info!(target: TARGET, "Plotted {}", plot_path.file_name().unwrap().to_str().unwrap());
         }
     }
 
@@ -187,7 +188,7 @@ fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec
 
     let output_path = plot_output_directory_path.join("resources.svg");
     let mut args = vec![
-        concat!(env!("CARGO_MANIFEST_DIR"), "/src/utils/resource_plot.py").to_string(),
+        format!("{}/src/utils/resource_plot.py", env!("CARGO_MANIFEST_DIR")),
         output_path.to_str().unwrap().to_string()
     ];
 
@@ -207,7 +208,10 @@ fn plot_resources(plot_output_directory_path: &PathBuf, experiment_results: &Vec
             .replace(',', "");
 
         for router_name in filter_routers(&experiment_result.experiment.network.nodes).keys() {
-            let router_log_file_path = RESULT_DIR_PATH.join(&experiment_result.experiment.experiment_name).join(format!("{router_name}.log"));
+            let router_log_file_path = RESULT_DIR_PATH
+                .join(&experiment_result.experiment.experiment_name)
+                .join(SUMMARY_FOLDER_NAME)
+                .join(format!("{router_name}.csv"));
 
             if !router_log_file_path.exists() {
                 continue;

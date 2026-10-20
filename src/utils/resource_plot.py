@@ -1,73 +1,44 @@
 #!python
-
-import re
+import csv
 import sys
-import matplotlib.pyplot as plt
-from matplotlib.legend_handler import HandlerTuple
-from datetime import datetime, timedelta
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+from matplotlib.legend_handler import HandlerTuple
 from matplotlib.patches import Ellipse
 
 
-def extract_experiment_time(path: str) -> tuple[datetime, datetime]:
-    parent_folder = Path(path).parent
-    experiment_log_file_path = f'{parent_folder}/experiment.log'
+def extract_summary(path: str):
+    """Reads a summary written by `compute results` (one CSV per router, merged over the runs).
 
-    with open(experiment_log_file_path, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
+    Returns the median series, the min/max band across runs and the end of the experiment
+    (in seconds since its start), or None if the file holds no data.
+    """
+    columns = ["elapsed_s", "mem_used_mib_median", "mem_used_mib_min", "mem_used_mib_max", "cpu_pct_median", "cpu_pct_min", "cpu_pct_max"]
+    series = {c: [] for c in columns}
+    in_experiment = []
 
-        start_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment start', content)
-        start_time = datetime.fromisoformat(start_match[len(start_match) - 1].replace("Z", "+00:00"))
+    def number(value: str) -> float:
+        return float(value) if value != "" else float("nan")
 
-        end_match = re.findall(r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s*INFO experiment: Experiment end', content)
-        end_time = datetime.fromisoformat(end_match[len(end_match) - 1].replace("Z", "+00:00"))
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            for c in columns:
+                series[c].append(number(row[c]))
+            in_experiment.append(row["in_experiment"] == "true")
 
-        return start_time, end_time
+    if not series["elapsed_s"]:
+        return None
 
-def extract_used_resources(path: str, start_time: datetime, end_time: datetime):
-    timestamps = []
-    used_mem = []
-    cpu_usage = []
-
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
-
-    for match in re.finditer(
-        r'(\d{4}-\d{2}-\d{2}T[\d:.]+Z).*?TRACE rx:\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
-        content
-    ):
-        ts_str, _, _, used, cpu = match.groups()
-
-        cpu = float(cpu)
-        if cpu < 0 or cpu > 100:
-            cpu = 0
-
-        timestamps.append(datetime.fromisoformat(ts_str.replace("Z", "+00:00")))
-        used_mem.append(float(used))
-        cpu_usage.append(cpu)
-
-    if not timestamps:
-        return None, None
-
-    measurement_start = start_time - timedelta(seconds=10)
-    measurement_end = end_time + timedelta(seconds=10)
-
-    filtered = [
-        (t, mem, cpu)
-        for t, mem, cpu in zip(timestamps, used_mem, cpu_usage)
-        if measurement_start <= t <= measurement_end
-    ]
-
-    if not filtered:
-        return None, None, None
-
-    timestamps, used_mem, cpu_usage = map(list, zip(*filtered))
-
-    # Normalize time to start at 0
-    elapsed = [(t - start_time).total_seconds() for t in timestamps]
-
-    return elapsed, used_mem, cpu_usage
+    inside = [t for t, flag in zip(series["elapsed_s"], in_experiment) if flag]
+    return {
+        "elapsed": series["elapsed_s"],
+        "mem": series["mem_used_mib_median"],
+        "mem_band": (series["mem_used_mib_min"], series["mem_used_mib_max"]),
+        "cpu": series["cpu_pct_median"],
+        "cpu_band": (series["cpu_pct_min"], series["cpu_pct_max"]),
+        "end": max(inside) if inside else None,
+    }
 
 def main(output_path: str, inputs: list[str]):
     fig, ax1 = plt.subplots(figsize=(7, 4), dpi=150)
@@ -80,8 +51,8 @@ def main(output_path: str, inputs: list[str]):
     mem_lines = []
     cpu_lines = []
 
-    experiment_start = None
-    experiment_end = None
+    experiment_end_elapsed = None
+    has_band = False
 
     for input in inputs:
         data = input.split(":")
@@ -93,19 +64,27 @@ def main(output_path: str, inputs: list[str]):
             label = data[0]
             path = data[1]
 
-        start_time, end_time = extract_experiment_time(path)
-        elapsed, used_memory, cpu_usage = extract_used_resources(path, start_time, end_time)
+        resources = extract_summary(path)
 
-        if experiment_start is None:
-            experiment_start = start_time
-            experiment_end = end_time
-
-        if elapsed is None:
+        if resources is None:
             print(f"Warning: no data found in {path}")
             continue
 
+        elapsed = resources["elapsed"]
+        used_memory = resources["mem"]
+        cpu_usage = resources["cpu"]
+
+        if experiment_end_elapsed is None:
+            experiment_end_elapsed = resources["end"]
+
         mem_line, = ax1.plot(elapsed, used_memory, label=label)
         cpu_line, = ax2.plot(elapsed, cpu_usage, linestyle=":", color=mem_line.get_color())
+
+        # Spread across the runs (summaries only): min-max band around the median.
+        if resources["mem_band"] is not None:
+            has_band = True
+            ax1.fill_between(elapsed, *resources["mem_band"], color=mem_line.get_color(), alpha=0.15, linewidth=0)
+            ax2.fill_between(elapsed, *resources["cpu_band"], color=mem_line.get_color(), alpha=0.08, linewidth=0)
 
         mem_lines.append(mem_line)
         cpu_lines.append(cpu_line)
@@ -143,12 +122,14 @@ def main(output_path: str, inputs: list[str]):
         # Mark the center of the min/max range
         ellipse_ax.plot(cpu_center, mem_center, marker=".", color=mem_line.get_color())
 
+
+    if not mem_lines:
+        print("Error: no data to plot")
+        sys.exit(1)
+
     # ------------------------------------------------------------------
     # Experiment boundaries
     # ------------------------------------------------------------------
-
-    # Convert experiment end time to seconds relative to experiment start
-    experiment_end_elapsed = (experiment_end - experiment_start ).total_seconds()
 
     # Experiment boundaries
     ax1.axvline(x=0, color="grey", linestyle="--", linewidth=1)
@@ -169,6 +150,12 @@ def main(output_path: str, inputs: list[str]):
     ax2.set_ylim(0, 100)
 
     plt.title("Used Memory and CPU load")
+
+    # Note: the former `plt.title("Used Memory and CPU load")` acted on the last created figure
+    # (the ellipse plot) and was then overwritten, so it never showed on this plot.
+    if has_band:
+        ax1.set_title("Median over runs (shaded: min to max)", fontsize=9)
+
 
     # Combine legends
     legend_handles = [

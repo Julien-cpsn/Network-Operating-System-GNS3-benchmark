@@ -22,14 +22,15 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read};
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use chrono::NaiveDateTime;
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tracing::{info, warn};
-use crate::utils::flent::summary::{experiment_dir, SUMMARY_FOLDER_NAME};
+use crate::utils::results::flent::summary::{experiment_dir, SUMMARY_FOLDER_NAME};
+use crate::utils::results::utils::natural_key;
 
 const TARGET: &str = "results";
 
@@ -350,13 +351,6 @@ fn write_gzipped_json(path: &Path, value: &Value) -> anyhow::Result<()> {
     serde_json::to_writer_pretty(&mut encoder, value)?;
     encoder.finish()?.into_inner().map_err(|e| e.into_error())?;
     Ok(())
-}
-
-/// `run_2` < `run_10`: compares the text prefix, then the trailing number.
-fn natural_key(name: &str) -> (String, u64) {
-    let split = name.trim_end_matches(|c: char| c.is_ascii_digit()).len();
-    let (prefix, digits) = name.split_at(split);
-    (prefix.to_string(), digits.parse().unwrap_or(0))
 }
 
 fn sanitize_dir_name(test: &str) -> String {
