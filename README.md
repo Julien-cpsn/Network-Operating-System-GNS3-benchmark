@@ -7,8 +7,8 @@ Benchmark and plot performances for router and network OSes.
 
 ## Prerequisites
 
-- [GNS3 v2](https://www.gns3.com/)
-- [QEMU](https://www.qemu.org/download/)
+- [QEMU](https://www.qemu.org/download/) (`qemu-system-x86_64` and `qemu-img`, KVM recommended)
+- `telnet` (used to drive the VM serial consoles)
 - [flent](https://flent.org/intro.html)
 - [Rust with Cargo](https://rust-lang.org/fr/tools/install/)
 - [uv](https://github.com/astral-sh/uv)
@@ -41,7 +41,15 @@ virt-builder debian-13 \
   --run-command "tar xzf xfr-*.tar.gz && mv xfr /usr/local/bin/"
 ```
 
-Then fill the `.env` file. You can use the `.env.example` as a starter
+Then fill the `.env` file. You can use the `.env.example` as a starter. Only `GUEST_IMAGE_PATH` is required:
+
+| Variable           | Default                | Description                                                                 |
+|--------------------|------------------------|-----------------------------------------------------------------------------|
+| `GUEST_IMAGE_PATH` |                        | Debian guest image created above                                            |
+| `QEMU_BINARY`      | `qemu-system-x86_64`   | QEMU system emulator                                                        |
+| `QEMU_IMG_BINARY`  | `qemu-img`             | Used to create the linked clones                                            |
+| `QEMU_WORK_DIR`    | `experimentation/vms`  | VM disks, pidfiles, QEMU logs and command lines. Wiped before each experiment |
+| `QEMU_ENABLE_KVM`  | `true`                 | Without KVM, VMs are emulated and routers use `-cpu max` instead of `-cpu host` |
 
 ### 3. Create an experiments
 
@@ -65,13 +73,7 @@ Then you should see all possible experiments created in `./experimentation/exper
 
 ### 4. Run the experiments
 
-Run the GNS3 server:
-
-```shell
-gns3server --local
-```
-
-Then you can run experiments:
+No server is needed: the tool starts the QEMU VMs itself.
 
 ```shell
 cargo run -- run --os SONiC --topology Dumbbell --protocol RIP --nic e1000 --test-batch "Basic RRUL at start" --resources hr
@@ -81,6 +83,22 @@ The command will run every experiment for SONiC OS, on Dumbbell topology, using 
 By removing an argument, the program will loop over all of its possible values. For example, by removing `--nic e1000`, the program with run the experiments with `rtl8139`, then with `e1000`, and then with `virtio-net-pci`. 
 
 Results are stored in `./experimentation/results/`
+
+#### How VMs are run
+
+Each node of the topology is a `qemu-system-x86_64` process:
+
+- **Disks**: linked clones, i.e. qcow2 overlays (`hda_disk.qcow2`, ...) backed by the untouched images of `operating_systems.toml` (routers, IDE) or `GUEST_IMAGE_PATH` (guests, virtio-scsi)
+- **Links**: each physical link is a point-to-point UDP tunnel between two QEMU `socket` netdevs on `127.0.0.1` (UDP ports 10000-20000), unconnected adapters are left unplugged
+- **Link failures**: the link is cut on both ends through QMP (`set_link ... up=false`), so both NICs lose carrier and no frame crosses the link anymore
+- **Consoles**: the serial console is a telnet server on `127.0.0.1` (TCP ports 5000-10000, printed in the logs as `Telnet console: telnet 127.0.0.1 <port>`)
+- **Control**: a QMP server per VM, used for link failures and to power the VM off
+
+The PCI device order is the one GNS3 2.2 used, so the guests and routers keep the same interface names (e.g. `ens4` for the guests).
+For each VM, `experimentation/vms/<experiment>/<node>/` contains `qemu_command.sh` (the exact command line, can be run again by hand), `qemu.log` and `qemu.pid`.
+VMs left running (`--no-stop`, crash) are stopped at the start of the next experiment, and on Ctrl-C.
+
+The backend has an integration test (needs QEMU, boots two empty VMs and checks PCI layout, overlays, links and shutdown): `cargo test qemu -- --ignored`
 
 ### 5. Plot the results
 
@@ -98,14 +116,19 @@ WIP
 
 ## Create ONIE and/or modified portable images
 
-1. Run the QEMU vm with multiple disks in GNS3
-2. Connect to the OS console and process to the OS installation or modification
-3. Once everything is set up as wanted, log out
-4. In GNS3 GUI, right-click on the router with your desired OS image. "Show in file manager"
-5. Localize the disk hosting the modified image (often `hda_disk.qcow2`)
-6. Commit the changed by using `qemu-img commit <hda_disk.qcow2>`
-7. Copy the commited image elsewhere
-8. Now, make it portable by using `qemu-img convert -f qcow2 -O qcow2 your-image.qcow2 your-portable-image.qcow2`
+1. Create a linked clone of the original image, so it stays untouched:
+   ```shell
+   qemu-img create -f qcow2 -F qcow2 -b /absolute/path/to/original.qcow2 work.qcow2
+   ```
+   (use `-F raw` for a `.img`/`.iso` image, add one clone per disk if the OS needs several)
+2. Boot it with its serial console in your terminal:
+   ```shell
+   qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 4 -nographic \
+     -drive file=work.qcow2,if=ide,index=0,media=disk,format=qcow2
+   ```
+3. Proceed to the OS installation or modification, then power the VM off from the OS
+4. Make it portable (standalone, without backing file): `qemu-img convert -f qcow2 -O qcow2 work.qcow2 your-portable-image.qcow2`
+5. Reference `your-portable-image.qcow2` in `experimentation/operating_systems.toml`
 
 ## Others
 
@@ -194,4 +217,4 @@ from `flent --list-tests`
   voip                       :  VoIP one-way stream test
   voip-1up                   :  VoIP one-way stream test with competing TCP stream
   voip-rrul                  :  VoIP one-way stream test with competing RRUL test
-```
+```

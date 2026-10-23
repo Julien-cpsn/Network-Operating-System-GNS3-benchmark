@@ -21,11 +21,10 @@ use crate::utils::log::setup_global_logger;
 
 pub static ARGS: Lazy<Args> = Lazy::new(|| Args::parse());
 
-pub static GNS3_SERVER_URL: OnceCell<String> = OnceCell::new();
-pub static GNS3_SERVER_USERNAME: OnceCell<String> = OnceCell::new();
-pub static GNS3_SERVER_PASSWORD: OnceCell<String> = OnceCell::new();
-pub static GNS3_PROJECT_PREFIX: OnceCell<String> = OnceCell::new();
-pub static GNS3_TEMPLATE_PREFIX: OnceCell<String> = OnceCell::new();
+pub static QEMU_BINARY: OnceCell<String> = OnceCell::new();
+pub static QEMU_IMG_BINARY: OnceCell<String> = OnceCell::new();
+pub static QEMU_WORK_DIR: OnceCell<PathBuf> = OnceCell::new();
+pub static QEMU_ENABLE_KVM: OnceCell<bool> = OnceCell::new();
 pub static GUEST_IMAGE_PATH: OnceCell<PathBuf> = OnceCell::new();
 
 #[tokio::main(flavor = "multi_thread")]
