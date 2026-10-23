@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context};
 use tokio::process::Command;
 use tracing::{debug, info, warn};
 use crate::{QEMU_BINARY, QEMU_ENABLE_KVM};
+use crate::models::nic::NicType;
 use crate::models::nodes::node::Node;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::qemu::image::create_linked_clone;
@@ -41,7 +42,7 @@ pub enum Connection {
 #[derive(Debug, Clone)]
 pub struct Adapter {
     /// QEMU device model (e1000, rtl8139, virtio-net-pci)
-    pub model: String,
+    pub model: NicType,
     pub mac: String,
     pub connection: Option<Connection>,
 }
@@ -95,7 +96,7 @@ impl QemuVm {
         node: &Node,
         images: &[PathBuf],
         disk_interface: DiskInterface,
-        adapter_model: String,
+        adapter_model: NicType,
         number_adapters: u32,
         extra_options: Vec<String>,
     ) -> anyhow::Result<QemuVm> {
@@ -171,7 +172,7 @@ impl QemuVm {
             node,
             &[guest_image.to_path_buf()],
             DiskInterface::Scsi,
-            String::from("virtio-net-pci"),
+            NicType::VirtIO,
             1,
             extra_options
         ).await
@@ -186,7 +187,7 @@ impl QemuVm {
             .next()
             .ok_or_else(|| anyhow!("Router {name} has no NIC"))?
             .nic_type
-            .to_qemu_name();
+            .clone();
 
         // "-cpu host" is only available with KVM
         let cpu_model = if *QEMU_ENABLE_KVM.get().unwrap() { "host" } else { "max" };
@@ -223,7 +224,7 @@ impl QemuVm {
     pub fn attach_tap(&mut self, adapter: u32, ifname: String) -> anyhow::Result<()> {
         let vhost = self.adapters
             .get(adapter as usize)
-            .is_some_and(|vm_adapter| vm_adapter.model == "virtio-net-pci")
+            .is_some_and(|vm_adapter| vm_adapter.model == NicType::VirtIO)
             && tap_vhost();
 
         self.attach(adapter, Connection::Tap { ifname, vhost })
@@ -284,7 +285,7 @@ impl QemuVm {
         push(&["-nic", "none"]);
 
         for (index, adapter) in self.adapters.iter().enumerate() {
-            let device = format!("{},mac={},id=nic{}", adapter.model, adapter.mac, index);
+            let device = format!("{},mac={},id=nic{}", adapter.model.to_qemu_name(), adapter.mac, index);
 
             let netdev = netdev_id(index as u32);
 
@@ -296,7 +297,9 @@ impl QemuVm {
                 // vnet_hdr=off: no checksum/TSO/GSO offload is exposed to the guest, frames stay MTU-sized
                 Some(Connection::Tap { ifname, vhost }) => {
                     let vhost = if *vhost { "on" } else { "off" };
-                    push(&["-device", &format!("{device},netdev={netdev},csum=off,gso=off,guest_tso4=off,guest_tso6=off,host_tso4=off,host_tso6=off")]);
+                    let additional_flags = if adapter.model == NicType::VirtIO { ",csum=off,gso=off,guest_tso4=off,guest_tso6=off,host_tso4=off,host_tso6=off" } else { "" };
+
+                    push(&["-device", &format!("{device},netdev={netdev}{additional_flags}")]);
                     push(&["-netdev", &format!("tap,id={netdev},ifname={ifname},script=no,downscript=no,vnet_hdr=off,vhost={vhost}")]);
                 },
                 // Not connected, like an unplugged cable

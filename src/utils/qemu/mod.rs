@@ -1,3 +1,4 @@
+pub mod host_monitor;
 pub mod image;
 pub mod network;
 pub mod ports;

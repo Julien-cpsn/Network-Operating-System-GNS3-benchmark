@@ -43,17 +43,17 @@ virt-builder debian-13 \
 
 Then fill the `.env` file. You can use the `.env.example` as a starter. Only `GUEST_IMAGE_PATH` is required:
 
-| Variable           | Default                | Description                                                                 |
-|--------------------|------------------------|-----------------------------------------------------------------------------|
-| `GUEST_IMAGE_PATH` |                        | Debian guest image created above                                            |
-| `QEMU_BINARY`      | `qemu-system-x86_64`   | QEMU system emulator                                                        |
-| `QEMU_IMG_BINARY`  | `qemu-img`             | Used to create the linked clones                                            |
-| `QEMU_WORK_DIR`    | `experimentation/vms`  | VM disks, pidfiles, QEMU logs and command lines. Wiped before each experiment |
-| `QEMU_ENABLE_KVM`  | `true`                 | Without KVM, VMs are emulated and routers use `-cpu max` instead of `-cpu host` |
+| Variable           | Default               | Description                                                                     |
+|--------------------|-----------------------|---------------------------------------------------------------------------------|
+| `GUEST_IMAGE_PATH` |                       | Debian guest image created above                                                |
+| `QEMU_BINARY`      | `qemu-system-x86_64`  | QEMU system emulator                                                            |
+| `QEMU_IMG_BINARY`  | `qemu-img`            | Used to create the linked clones                                                |
+| `QEMU_WORK_DIR`    | `experimentation/vms` | VM disks, pidfiles, QEMU logs and command lines. Wiped before each experiment   |
+| `QEMU_ENABLE_KVM`  | `true`                | Without KVM, VMs are emulated and routers use `-cpu max` instead of `-cpu host` |
 
 ### 3. Create an experiments
 
-Fulfil the exeperiment data needed in the following files:
+Fulfil the experiment data needed in the following files:
 
 ```
 ./experimentation/network_stacks.toml
@@ -63,7 +63,7 @@ Fulfil the exeperiment data needed in the following files:
 ./experimentation/topologies.toml
 ```
 
-Run the following command to generate exeperiment files:
+Run the following command to generate experiment files:
 
 ```shell
 cargo run -- generate files
@@ -100,7 +100,13 @@ VMs left running (`--no-stop`, crash) are stopped at the start of the next exper
 
 The backend has an integration test (needs QEMU, boots two empty VMs and checks PCI layout, overlays, links and shutdown): `cargo test qemu -- --ignored`
 
-### 5. Plot the results
+### 5. Pre-compute the results
+
+```shell
+cargo run -- compute
+```
+
+### 6. Plot the results
 
 Then you can plot the results:
 
@@ -217,4 +223,4 @@ from `flent --list-tests`
   voip                       :  VoIP one-way stream test
   voip-1up                   :  VoIP one-way stream test with competing TCP stream
   voip-rrul                  :  VoIP one-way stream test with competing RRUL test
-```
+```

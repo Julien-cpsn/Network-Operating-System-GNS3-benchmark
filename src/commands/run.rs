@@ -30,6 +30,7 @@ use crate::utils::files::results_dir::RESULT_DIR_PATH;
 use crate::utils::files::routing_stacks::parse_routing_stack_list_file;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::link::{create_link, link_failure};
+use crate::utils::qemu::host_monitor::{host_monitor_task, MonitoredVm};
 use crate::utils::qemu::image::resolve_images;
 use crate::utils::qemu::ports::reset_port_allocator;
 use crate::utils::qemu::network::{delete_all_taps, link_backend};
@@ -414,6 +415,17 @@ pub async fn run_experiment(
     let stop_monitoring = Arc::new(AtomicBool::new(false));
     let mut monitor_threads = JoinSet::new();
 
+    // Host side: every VM (routers, but also clients and servers, to locate bottlenecks)
+    let monitored_vms: Vec<MonitoredVm> = filter_routers(&experiment.network.nodes)
+        .values()
+        .filter_map(|node| node.vm.as_ref().and_then(MonitoredVm::from_vm))
+        .collect();
+
+    let host_monitor = {
+        let (run_path, stop) = (experiment_run_path.clone(), stop_monitoring.clone());
+        tokio::task::spawn_blocking(move || host_monitor_task(run_path, monitored_vms, stop))
+    };
+
     for (router_name, node) in filter_routers(&experiment.network.nodes) {
         let router  = node.unwrap_router();
         let os = oses.get(&router.os_name).ok_or_else(|| anyhow!("No operating system {} found for {}", router.os_name, router_name))?;
@@ -511,6 +523,12 @@ pub async fn run_experiment(
 
     stop_monitoring.store(true, Ordering::Relaxed);
     monitor_threads.join_all().await;
+
+    match host_monitor.await {
+        Ok(Ok(())) => {},
+        Ok(Err(error)) => error!(target: TARGET, "Host monitoring failed: {:?}", error),
+        Err(error) => error!(target: TARGET, "Host monitoring task failed: {}", error),
+    }
 
     if !run_command.run_command.no_test {
         for test in &experiment.test_batch {
