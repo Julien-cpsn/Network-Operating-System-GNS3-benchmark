@@ -32,6 +32,7 @@ use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::link::{create_link, link_failure};
 use crate::utils::qemu::image::resolve_images;
 use crate::utils::qemu::ports::reset_port_allocator;
+use crate::utils::qemu::network::{delete_all_taps, link_backend};
 use crate::utils::qemu::process::{stop_all_vms, stop_and_delete_all_vms};
 use crate::utils::qemu::vm::{sanitize_name, QemuVm};
 use crate::utils::log::{find_and_delete_log_files, setup_experiment_logger, EXPERIMENT_LOG_FILE_NAME, find_and_delete_experiment_log_file};
@@ -89,6 +90,7 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
             thread::sleep(Duration::from_secs(3));
             warn!(target: "run", "Experiment did not stop by itself, stopping VMs");
             let _ = stop_all_vms(&work_dir());
+            let _ = delete_all_taps();
             exit(130);
         });
     }).expect("Error setting Ctrl-C handler");
@@ -134,12 +136,18 @@ pub async fn run(run_command: RunCommand) -> anyhow::Result<()> {
                  _ = token.cancelled() => {
                     info!(target: TARGET, "Stopping experiment");
                     stop_all_vms(&work_dir())?;
+                    delete_all_taps()?;
                     break 'experiment_loop;
                 }
             }
 
             sleep(Duration::from_secs(INTER_XP_WAIT)).await;
         }
+    }
+
+    // The taps of the last experiment (their VMs must be stopped first)
+    if !run_command.run_command.no_stop {
+        delete_all_taps()?;
     }
 
     info!(target: TARGET, "Finished");
@@ -167,6 +175,8 @@ pub async fn run_experiment(
     /* INITIALIZATION */
 
     let experiment_start = Instant::now();
+
+    info!(target: TARGET, "Link backend: {}", link_backend());
 
     // Stops the VMs left by a previous experiment and deletes their disks
     let work_dir = work_dir();
@@ -208,7 +218,7 @@ pub async fn run_experiment(
             return Err(anyhow!("Node b \"{}\" not found in link {}", &link.node_b, index));
         }
 
-        let qemu_link = create_link(&mut experiment.network.nodes, link)?;
+        let qemu_link = create_link(&mut experiment.network.nodes, link, index)?;
 
         links.push((link.clone(), qemu_link));
     }
@@ -502,8 +512,10 @@ pub async fn run_experiment(
     stop_monitoring.store(true, Ordering::Relaxed);
     monitor_threads.join_all().await;
 
-    for test in &experiment.test_batch {
-        harvest_results(&experiment_run_path, &test)?;
+    if !run_command.run_command.no_test {
+        for test in &experiment.test_batch {
+            harvest_results(&experiment_run_path, &test)?;
+        }
     }
 
     /* STOP */

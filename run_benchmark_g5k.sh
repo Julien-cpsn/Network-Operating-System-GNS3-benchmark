@@ -15,12 +15,23 @@ sudo apt install -y \
     ca-certificates \
     curl \
     gnupg2 \
-    telnet
+    telnet \
+    iproute2 \
+    procps
 
 # The VMs are started by the benchmark user and need KVM
 if [ ! -w /dev/kvm ]; then
         sudo chmod o+rw /dev/kvm
 fi
+
+# vhost-net for the VirtIO NICs (taps are created through passwordless sudo)
+sudo modprobe vhost_net
+if [ ! -w /dev/vhost-net ]; then
+        sudo chmod o+rw /dev/vhost-net
+fi
+
+echo 0 | sudo tee /sys/module/kvm/parameters/halt_poll_ns
+echo 0 | sudo tee /sys/kernel/mm/ksm/run
 
 cd "/home/${USER}/survey/Network-Operating-System-GNS3-benchmark"
 

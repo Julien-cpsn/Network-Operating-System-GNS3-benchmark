@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use anyhow::bail;
 use once_cell::sync::Lazy;
 
-/// Same default ranges as GNS3: outside of the Linux ephemeral range (32768-60999), so that
+/// Outside the Linux ephemeral range (32768-60999), so that
 /// the source port of a telnet client can never steal a port that a VM is about to bind.
 const TCP_PORT_RANGE: (u16, u16) = (5000, 10000);
 const UDP_PORT_RANGE: (u16, u16) = (10000, 20000);

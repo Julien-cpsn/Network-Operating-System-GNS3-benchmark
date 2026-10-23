@@ -46,7 +46,7 @@ pub async fn image_format(image_path: &Path) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow!("qemu-img could not detect the format of \"{}\"", image_path.display()))
 }
 
-/// Linked clone, as GNS3 did: a qcow2 overlay backed by the untouched base image,
+/// A qcow2 overlay backed by the untouched base image,
 /// so every experiment starts from a pristine disk and the base image is never written.
 pub async fn create_linked_clone(base_image: &Path, overlay: &Path) -> anyhow::Result<()> {
     let base_format = image_format(base_image).await?;

@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use std::thread::sleep;
 use tracing::{debug, info, warn};
 use walkdir::WalkDir;
+use crate::utils::qemu::network::delete_all_taps;
 
 const TARGET: &str = "process";
 
@@ -89,9 +90,10 @@ pub fn stop_all_vms(work_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Equivalent of the former "delete old GNS3 projects and templates": stops leftover VMs and wipes their disks
+/// Stops leftover VMs, wipes their disks and deletes their taps
 pub fn stop_and_delete_all_vms(work_dir: &Path) -> anyhow::Result<()> {
     stop_all_vms(work_dir)?;
+    delete_all_taps()?;
 
     if work_dir.exists() {
         debug!(target: TARGET, "Deleting old VMs in {}", work_dir.display());

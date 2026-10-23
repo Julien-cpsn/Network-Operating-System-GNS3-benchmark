@@ -2,6 +2,7 @@
 //! `cargo test qemu -- --ignored --nocapture`
 
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::Path;
 use std::process::Command;
 use indexmap::IndexMap;
@@ -15,6 +16,7 @@ use crate::models::nodes::router::Router;
 use crate::models::routes::route_config::RouteConfig;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::link::{create_link, link_failure};
+use crate::utils::qemu::network::{link_backend, set_link_backend, LinkBackend};
 use crate::utils::qemu::process::{is_qemu_alive, stop_and_delete_all_vms, PID_FILE_NAME};
 use crate::utils::qemu::qmp::qmp_execute;
 use crate::utils::qemu::vm::QemuVm;
@@ -44,12 +46,32 @@ async fn hmp(qmp_port: u16, command: &str) -> String {
     result.as_str().unwrap().to_string()
 }
 
+/// The link backend and the port allocator are global: scenarios must not run concurrently
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn qemu_backend_end_to_end() {
+async fn qemu_backend_udp_links() {
+    let _guard = SERIAL.lock().await;
+    set_link_backend(LinkBackend::Udp, true);
+    scenario().await;
+}
+
+/// Needs root or passwordless sudo. vhost-net is used only if /dev/vhost-net and KVM are usable.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn qemu_backend_tap_links() {
+    let _guard = SERIAL.lock().await;
+    let vhost = Path::new("/dev/vhost-net").exists() && Path::new("/dev/kvm").exists();
+    set_link_backend(LinkBackend::Tap, vhost);
+    scenario().await;
+    set_link_backend(LinkBackend::Udp, true);
+}
+
+async fn scenario() {
     QEMU_BINARY.get_or_init(|| String::from("qemu-system-x86_64"));
     QEMU_IMG_BINARY.get_or_init(|| String::from("qemu-img"));
-    QEMU_ENABLE_KVM.get_or_init(|| fs::OpenOptions::new().read(true).write(true).open("/dev/kvm").is_ok());
+    QEMU_ENABLE_KVM.get_or_init(|| OpenOptions::new().read(true).write(true).open("/dev/kvm").is_ok());
 
     fs::create_dir_all(&*SHARED_DIR_PATH).unwrap();
 
@@ -83,7 +105,7 @@ async fn qemu_backend_end_to_end() {
     nodes["Router"].vm = Some(router);
 
     let link = Link { node_a: String::from("Client"), adapter_a: 0, node_b: String::from("Router"), adapter_b: 1 };
-    let qemu_link = create_link(&mut nodes, &link).unwrap();
+    let qemu_link = create_link(&mut nodes, &link, 0).unwrap();
 
     for vm in nodes.values_mut().map(|n| n.vm.as_mut().unwrap()) {
         vm.start().await.unwrap();
@@ -114,6 +136,16 @@ async fn qemu_backend_end_to_end() {
     println!("{network}");
     assert!(network.contains("net1"));
 
+    if link_backend() == LinkBackend::Tap {
+        // Both taps exist, are attached to QEMU, and are wired to each other
+        for tap in ["nosb0000a", "nosb0000b"] {
+            assert!(Path::new(&format!("/sys/class/net/{tap}")).exists());
+        }
+        assert!(network.contains("ifname=nosb0000b"));
+        let filters = Command::new("tc").args(["filter", "show", "dev", "nosb0000a", "ingress"]).output().unwrap();
+        assert!(String::from_utf8_lossy(&filters.stdout).contains("nosb0000b"));
+    }
+
     // set_link resolves the netdev ids (an unknown id is an error), then cuts both ends
     let unknown = qmp_execute(nodes["Router"].vm.as_ref().unwrap().qmp_port, "set_link", Some(json!({ "name": "net9", "up": false }))).await;
     assert!(unknown.is_err());
@@ -127,4 +159,5 @@ async fn qemu_backend_end_to_end() {
     }
 
     stop_and_delete_all_vms(&work_dir).unwrap();
+    assert!(!Path::new("/sys/class/net/nosb0000a").exists());
 }

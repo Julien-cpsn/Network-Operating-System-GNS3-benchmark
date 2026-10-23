@@ -11,6 +11,7 @@ use crate::{QEMU_BINARY, QEMU_ENABLE_KVM};
 use crate::models::nodes::node::Node;
 use crate::utils::files::shared_dir::SHARED_DIR_PATH;
 use crate::utils::qemu::image::create_linked_clone;
+use crate::utils::qemu::network::tap_vhost;
 use crate::utils::qemu::ports::allocate_tcp_port;
 use crate::utils::qemu::process::{is_qemu_alive, read_pid_file, terminate_qemu, wait_for_exit, PID_FILE_NAME};
 use crate::utils::qemu::qmp::qmp_execute;
@@ -24,15 +25,17 @@ const CONSOLE_HOST: &str = "127.0.0.1";
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiskInterface {
     Ide,
-    /// virtio-scsi controller + scsi-hd, as the GNS3 "scsi" disk interface
+    /// virtio-scsi controller + scsi-hd
     Scsi,
 }
 
-/// One end of a point-to-point UDP tunnel
+/// What an adapter is plugged into
 #[derive(Debug, Clone)]
-pub struct UdpTunnel {
-    pub local_port: u16,
-    pub remote_port: u16,
+pub enum Connection {
+    /// One end of a point-to-point UDP tunnel
+    Udp { local_port: u16, remote_port: u16 },
+    /// A tap wired to the tap of the other end, with in-kernel vhost-net for VirtIO NICs
+    Tap { ifname: String, vhost: bool },
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +43,7 @@ pub struct Adapter {
     /// QEMU device model (e1000, rtl8139, virtio-net-pci)
     pub model: String,
     pub mac: String,
-    pub tunnel: Option<UdpTunnel>,
+    pub connection: Option<Connection>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,7 +57,7 @@ pub struct QemuVm {
     pub disks: Vec<PathBuf>,
     pub disk_interface: DiskInterface,
     pub adapters: Vec<Adapter>,
-    /// Appended at the end of the command line (the former GNS3 template "options")
+    /// Appended at the end of the command line
     pub extra_options: Vec<String>,
     pub console_host: String,
     pub console_port: u16,
@@ -116,7 +119,7 @@ impl QemuVm {
             .map(|adapter| Adapter {
                 model: adapter_model.clone(),
                 mac: format!("0c:42:{:02x}:{:02x}:00:{:02x}", (node_index >> 8) & 0xff, node_index & 0xff, adapter & 0xff),
-                tunnel: None,
+                connection: None,
             })
             .collect();
 
@@ -189,7 +192,7 @@ impl QemuVm {
         let cpu_model = if *QEMU_ENABLE_KVM.get().unwrap() { "host" } else { "max" };
 
         let extra_options = vec![
-            String::from("-mem-prealloc"),
+            //String::from("-mem-prealloc"),
             String::from("-cpu"),
             String::from(cpu_model),
         ];
@@ -211,30 +214,44 @@ impl QemuVm {
         self.dir.join(PID_FILE_NAME)
     }
 
-    /// Connects `adapter` to a UDP tunnel. Must be called before `start`.
+    /// Connects `adapter` to one end of a UDP tunnel. Must be called before `start`.
     pub fn attach_udp_tunnel(&mut self, adapter: u32, local_port: u16, remote_port: u16) -> anyhow::Result<()> {
+        self.attach(adapter, Connection::Udp { local_port, remote_port })
+    }
+
+    /// Connects `adapter` to a tap. VirtIO NICs use vhost-net. Must be called before `start`.
+    pub fn attach_tap(&mut self, adapter: u32, ifname: String) -> anyhow::Result<()> {
+        let vhost = self.adapters
+            .get(adapter as usize)
+            .is_some_and(|vm_adapter| vm_adapter.model == "virtio-net-pci")
+            && tap_vhost();
+
+        self.attach(adapter, Connection::Tap { ifname, vhost })
+    }
+
+    fn attach(&mut self, adapter: u32, connection: Connection) -> anyhow::Result<()> {
         let nb_adapters = self.adapters.len();
         let vm_adapter = self.adapters
             .get_mut(adapter as usize)
             .ok_or_else(|| anyhow!("{} has no adapter {} (only {} adapters)", self.name, adapter, nb_adapters))?;
 
-        if vm_adapter.tunnel.is_some() {
+        if vm_adapter.connection.is_some() {
             bail!("Adapter {} of {} is already connected", adapter, self.name);
         }
 
-        vm_adapter.tunnel = Some(UdpTunnel { local_port, remote_port });
+        vm_adapter.connection = Some(connection);
 
         Ok(())
     }
 
-    /// The QEMU command line. The device order reproduces the one of GNS3 2.2, so that the guest
-    /// sees the same PCI slots and therefore the same interface names (e.g. ens4 for the guests).
+    /// The QEMU command line
+    /// The guest sees the same PCI slots and therefore the same interface names (e.g. ens4 for the guests).
     pub fn build_args(&self) -> Vec<String> {
         let mut args: Vec<String> = Vec::new();
 
         let mut push = |values: &[&str]| args.extend(values.iter().map(|v| v.to_string()));
 
-        push(&["-name", &self.name]);
+        push(&["-name", &format!("{},debug-threads=on", self.name)]);
         push(&["-m", &format!("{}M", self.ram)]);
         push(&["-smp", &format!("cpus={0},maxcpus={0},sockets=1", self.vcpu)]);
 
@@ -260,7 +277,7 @@ impl QemuVm {
         }
 
         push(&["-uuid", &self.uuid]);
-        // No graphical output, but the default VGA device is kept (it occupies a PCI slot, as with GNS3)
+        // No graphical output, but the default VGA device is kept
         push(&["-display", "none"]);
         push(&["-serial", &format!("telnet:{}:{},server=on,wait=off", self.console_host, self.console_port)]);
         push(&["-qmp", &format!("tcp:127.0.0.1:{},server=on,wait=off", self.qmp_port)]);
@@ -269,11 +286,18 @@ impl QemuVm {
         for (index, adapter) in self.adapters.iter().enumerate() {
             let device = format!("{},mac={},id=nic{}", adapter.model, adapter.mac, index);
 
-            match &adapter.tunnel {
-                Some(tunnel) => {
-                    let netdev = netdev_id(index as u32);
+            let netdev = netdev_id(index as u32);
+
+            match &adapter.connection {
+                Some(Connection::Udp { local_port, remote_port }) => {
                     push(&["-device", &format!("{device},netdev={netdev}")]);
-                    push(&["-netdev", &format!("socket,id={netdev},udp=127.0.0.1:{},localaddr=127.0.0.1:{}", tunnel.remote_port, tunnel.local_port)]);
+                    push(&["-netdev", &format!("socket,id={netdev},udp=127.0.0.1:{remote_port},localaddr=127.0.0.1:{local_port}")]);
+                },
+                // vnet_hdr=off: no checksum/TSO/GSO offload is exposed to the guest, frames stay MTU-sized
+                Some(Connection::Tap { ifname, vhost }) => {
+                    let vhost = if *vhost { "on" } else { "off" };
+                    push(&["-device", &format!("{device},netdev={netdev},csum=off,gso=off,guest_tso4=off,guest_tso6=off,host_tso4=off,host_tso6=off")]);
+                    push(&["-netdev", &format!("tap,id={netdev},ifname={ifname},script=no,downscript=no,vnet_hdr=off,vhost={vhost}")]);
                 },
                 // Not connected, like an unplugged cable
                 None => push(&["-device", &device]),
